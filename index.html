@@ -71,7 +71,7 @@
 <div class="hud" id="layers">
   <h2>Connection layers</h2>
   <div id="layer-toggles"></div>
-  <div class="hint">click node = details · drag = orbit<br>wheel = zoom · right-drag = pan</div>
+  <div class="hint">click node = focus · click space = release<br>drag = orbit · wheel = zoom · right-drag = pan</div>
 </div>
 
 <div class="hud" id="info">
@@ -88,7 +88,8 @@
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+    "troika-three-text": "https://cdn.jsdelivr.net/npm/troika-three-text@0.52.4/dist/troika-three-text.esm.js"
   }
 }
 </script>
@@ -100,6 +101,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+import { Text } from 'troika-three-text';
 
 /* ============================================================
    DATA MODEL — public-safe (tool names + patterns only)
@@ -269,28 +274,53 @@ const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05070d);
 scene.fog = new THREE.FogExp2(0x05070d, 0.012);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-camera.position.set(1, 21, 33);
+const HOME_CAM = new THREE.Vector3(1, 21, 33);
+const HOME_TGT = new THREE.Vector3(-3, 0.8, -0.5);
+camera.position.set(0, 55, 85); // cinematic intro start
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-controls.autoRotate = true;
+controls.autoRotate = false;
 controls.autoRotateSpeed = 0.55;
 controls.maxPolarAngle = Math.PI * 0.55;
 controls.minDistance = 8;
 controls.maxDistance = 90;
-controls.target.set(-3, 0.8, -0.5);
+controls.target.set(0, 10, 0);
+controls.enabled = false;
+
+/* ---------- camera animation (intro + fly-to-node) ---------- */
+let camAnim = null;
+function flyTo(camPos, tgtPos, dur, done) {
+  camAnim = {
+    t: 0, dur,
+    fromP: camera.position.clone(), toP: camPos.clone(),
+    fromT: controls.target.clone(), toT: tgtPos.clone(),
+    done: done || null,
+  };
+  controls.enabled = false;
+}
+function cancelFly() {
+  if (camAnim) { camAnim = null; controls.enabled = true; }
+}
+renderer.domElement.addEventListener('pointerdown', cancelFly);
+const easeInOutCubic = k => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
 
 // pause auto-rotate while interacting, resume after idle
 let idleTimer = null;
 controls.addEventListener('start', () => { controls.autoRotate = false; clearTimeout(idleTimer); });
-controls.addEventListener('end', () => { idleTimer = setTimeout(() => controls.autoRotate = true, 5000); });
+controls.addEventListener('end', () => {
+  clearTimeout(idleTimer);
+  if (!selected) idleTimer = setTimeout(() => controls.autoRotate = true, 5000);
+});
 
 // lights
 scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
@@ -303,7 +333,7 @@ scene.add(rimLight);
 
 // starfield
 {
-  const n = 900, pos = new Float32Array(n * 3);
+  const n = 1400, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
     const r = 90 + Math.random() * 120, t = Math.random() * Math.PI * 2, p = Math.acos(2 * Math.random() - 1);
     pos[i*3]   = r * Math.sin(p) * Math.cos(t);
@@ -315,10 +345,46 @@ scene.add(rimLight);
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x3a4a6a, size: 0.35, sizeAttenuation: true })));
 }
 
-// ground grid
+// reflective floor: mirror + dark veil + grid
+{
+  const reflector = new Reflector(new THREE.PlaneGeometry(120, 120), {
+    clipBias: 0.003,
+    textureWidth: Math.floor(window.innerWidth * 0.5),
+    textureHeight: Math.floor(window.innerHeight * 0.5),
+    color: 0x18223a,
+  });
+  reflector.rotation.x = -Math.PI / 2;
+  reflector.position.y = -0.08;
+  scene.add(reflector);
+
+  const veil = new THREE.Mesh(
+    new THREE.PlaneGeometry(120, 120),
+    new THREE.MeshBasicMaterial({ color: 0x05070d, transparent: true, opacity: 0.84, depthWrite: false })
+  );
+  veil.rotation.x = -Math.PI / 2;
+  veil.position.y = -0.05;
+  scene.add(veil);
+}
 const grid = new THREE.GridHelper(90, 45, 0x1c2a4a, 0x101a30);
 grid.position.y = -0.02;
 scene.add(grid);
+
+/* ---------- SDF text labels (troika) ---------- */
+const LABEL_FONT = 'https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.2.5/files/ibm-plex-mono-latin-500-normal.woff';
+function makeLabel(text, { size = 0.36, color = '#cfe0ff', anchorY = 'bottom' } = {}) {
+  const t = new Text();
+  t.text = text;
+  t.font = LABEL_FONT;
+  t.fontSize = size;
+  t.color = new THREE.Color(color);
+  t.anchorX = 'center';
+  t.anchorY = anchorY;
+  t.outlineWidth = 0.022;
+  t.outlineColor = new THREE.Color(0x05070d);
+  t.outlineOpacity = 0.9;
+  t.sync();
+  return t;
+}
 
 /* ---------- site platforms ---------- */
 function makePlatform(cx, cz, w, d, color, label) {
@@ -333,37 +399,31 @@ function makePlatform(cx, cz, w, d, color, label) {
   );
   edges.position.copy(m.position);
   scene.add(edges);
-  const sprite = makeTextSprite(label, { size: 44, color: '#aebadb', pad: 22 });
+  const sprite = makeLabel(label, { size: 1.05, color: '#aebadb' });
   sprite.position.set(cx, 0.65, cz + d / 2 + 1.1);
-  sprite.scale.multiplyScalar(1.35);
   scene.add(sprite);
 }
 makePlatform(-12.2, -1.5, 13.5, 13.5, 0x4f8cff, 'SITE A · NAS HUB');
 makePlatform(9.75, -4, 7.5, 8.5, 0x2fe6a8, 'SITE B · SATELLITE');
 
-/* ---------- labels ---------- */
-function makeTextSprite(text, { size = 40, color = '#e8eefc', pad = 18 } = {}) {
-  const cv = document.createElement('canvas');
-  const ctx = cv.getContext('2d');
-  ctx.font = `600 ${size}px "SF Mono", Menlo, Consolas, monospace`;
-  const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
-  cv.width = w; cv.height = size + pad * 2;
-  const c2 = cv.getContext('2d');
-  c2.font = `600 ${size}px "SF Mono", Menlo, Consolas, monospace`;
-  c2.textBaseline = 'middle'; c2.textAlign = 'center';
-  c2.shadowColor = 'rgba(0,0,0,0.9)'; c2.shadowBlur = 10;
-  c2.fillStyle = color;
-  c2.fillText(text, w / 2, cv.height / 2);
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sp.scale.set(cv.width / 78, cv.height / 78, 1);
-  return sp;
-}
-
 /* ---------- nodes ---------- */
 const nodeById = {};
 const pickables = [];
+
+function injectFresnel(mat, colorHex, strength) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uRimColor = { value: new THREE.Color(colorHex) };
+    shader.uniforms.uRimPower = { value: 2.4 };
+    shader.uniforms.uRimStrength = { value: strength };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform vec3 uRimColor;\nuniform float uRimPower;\nuniform float uRimStrength;\nvoid main() {')
+      .replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n' +
+        '  float rimF = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), uRimPower);\n' +
+        '  totalEmissiveRadiance += uRimColor * rimF * uRimStrength;\n');
+  };
+  mat.customProgramCacheKey = () => 'fresnel-rim';
+}
 
 function makeNode(def) {
   const cat = CATEGORIES[def.cat];
@@ -377,14 +437,16 @@ function makeNode(def) {
   const mat = new THREE.MeshStandardMaterial({
     color: cat.color, roughness: 0.32, metalness: 0.55,
     emissive: cat.color, emissiveIntensity: isOverlay ? 0.35 : 0.18,
-    transparent: isOverlay, opacity: isOverlay ? 0.85 : 1,
+    transparent: true, opacity: isOverlay ? 0.85 : 1,
     wireframe: isOverlay,
   });
+  if (!isOverlay) injectFresnel(mat, cat.color, 0.85);
   const mesh = new THREE.Mesh(geo, mat);
   group.add(mesh);
 
+  let edge = null;
   if (!isOverlay) {
-    const edge = new THREE.LineSegments(
+    edge = new THREE.LineSegments(
       new THREE.EdgesGeometry(geo),
       new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.9 })
     );
@@ -397,7 +459,7 @@ function makeNode(def) {
   halo.scale.setScalar(isOverlay ? 3.0 : 2.5);
   group.add(halo);
 
-  const label = makeTextSprite(def.label, { color: def.cat === 'client' ? '#ffffff' : '#cfe0ff' });
+  const label = makeLabel(def.label, { color: def.cat === 'client' ? '#ffffff' : '#cfe0ff' });
   label.position.y = isOverlay ? 1.7 : 1.45;
   group.add(label);
 
@@ -406,7 +468,11 @@ function makeNode(def) {
 
   mesh.userData.nodeDef = def;
   pickables.push(mesh);
-  nodeById[def.id] = { def, group, mesh, baseY: def.pos[1], halo };
+  nodeById[def.id] = {
+    def, group, mesh, edge, halo, label,
+    baseY: def.pos[1],
+    baseEmissive: isOverlay ? 0.35 : 0.18,
+  };
   return nodeById[def.id];
 }
 
@@ -428,11 +494,33 @@ function makeGlowSprite(color) {
 
 NODES.forEach(makeNode);
 
-/* ---------- links + flow particles ---------- */
+/* ---------- links: base line + shader pulse tube ---------- */
 const linkGroups = {};
 Object.keys(LAYERS).forEach(k => { linkGroups[k] = new THREE.Group(); scene.add(linkGroups[k]); });
 
-const flows = []; // { curve, points, speeds, geo, layer }
+const tubeMats = [];
+const tubePickables = [];
+const linkStates = []; // { def, line, tubeMat, label }
+
+const tubeVert = `
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`;
+const tubeFrag = `
+  uniform vec3 uColor;
+  uniform float uTime, uOffset, uDim, uBoost;
+  varying vec2 vUv;
+  void main() {
+    float x = vUv.x;
+    float pulse = 0.0;
+    for (int i = 0; i < 2; i++) {
+      float pos = fract(uTime * 0.11 + uOffset + float(i) * 0.5);
+      pulse += smoothstep(0.09, 0.0, abs(x - pos));
+    }
+    float a = (0.06 + pulse * 0.85) * uDim;
+    gl_FragColor = vec4(uColor * uBoost, a);
+  }
+`;
 
 function makeLink(def) {
   const A = nodeById[def.a], B = nodeById[def.b];
@@ -448,31 +536,45 @@ function makeLink(def) {
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const line = new THREE.Line(geo, def.dashed
     ? new THREE.LineDashedMaterial({ color: layerCfg.color, transparent: true, opacity: 0.34, dashSize: 0.5, gapSize: 0.35 })
-    : new THREE.LineBasicMaterial({ color: layerCfg.color, transparent: true, opacity: 0.5 }));
+    : new THREE.LineBasicMaterial({ color: layerCfg.color, transparent: true, opacity: 0.42 }));
   if (def.dashed) line.computeLineDistances();
   linkGroups[def.layer].add(line);
 
+  // glow pulse tube (replaces old flow particles)
+  const tubeMat = new THREE.ShaderMaterial({
+    vertexShader: tubeVert, fragmentShader: tubeFrag,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: {
+      uColor: { value: new THREE.Color(layerCfg.color) },
+      uTime: { value: 0 },
+      uOffset: { value: Math.random() },
+      uDim: { value: 1 },
+      uBoost: { value: 1 },
+    },
+  });
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.045, 5, false), tubeMat);
+  tube.userData.linkDef = def;
+  linkGroups[def.layer].add(tube);
+  tubeMats.push(tubeMat);
+  tubePickables.push(tube);
+
+  let label = null;
   if (def.label) {
-    const sp = makeTextSprite(def.label, { size: 30, color: '#8fa3cc' });
-    sp.position.copy(curve.getPoint(0.5)).y += 0.55;
-    sp.scale.multiplyScalar(0.8);
-    linkGroups[def.layer].add(sp);
+    label = makeLabel(def.label, { size: 0.26, color: '#8fa3cc' });
+    label.position.copy(curve.getPoint(0.5));
+    label.position.y += 0.55;
+    linkGroups[def.layer].add(label);
   }
 
-  // flow particles
-  const COUNT = 3;
-  const pgeo = new THREE.BufferGeometry();
-  pgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3));
-  const pts2 = new THREE.Points(pgeo, new THREE.PointsMaterial({
-    color: layerCfg.color, size: 0.32, transparent: true, opacity: 0.95,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
-  linkGroups[def.layer].add(pts2);
-  const speeds = Array.from({ length: COUNT }, (_, i) => ({ t: i / COUNT, v: 0.10 + Math.random() * 0.08 }));
-  flows.push({ curve, geo: pgeo, speeds, layer: def.layer });
+  linkStates.push({ def, line, tubeMat, label, baseLineOpacity: line.material.opacity });
 }
 
 LINKS.forEach(makeLink);
+
+// adjacency for focus dimming
+const adjacency = {};
+NODES.forEach(n => { adjacency[n.id] = new Set(); });
+LINKS.forEach(l => { if (adjacency[l.a]) adjacency[l.a].add(l.b); if (adjacency[l.b]) adjacency[l.b].add(l.a); });
 
 /* ---------- legend + layer toggles ---------- */
 const legend = document.getElementById('legend');
@@ -493,59 +595,140 @@ Object.entries(LAYERS).forEach(([key, cfg]) => {
   toggles.appendChild(label);
 });
 
-/* ---------- picking / info panel ---------- */
+/* ---------- picking / focus / info panel ---------- */
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-let hovered = null;
+let hoveredNode = null;
+let hoveredTube = null;
 let selected = null;
 
 const infoEl = document.getElementById('info');
-document.getElementById('info-close').addEventListener('click', () => {
-  infoEl.classList.remove('open');
-  if (selected) { setEmissive(selected, false); selected = null; }
-});
+document.getElementById('info-close').addEventListener('click', () => deselect());
 
 function setEmissive(node, on) {
-  node.mesh.material.emissiveIntensity = on ? 0.85 : (node.def.cat === 'net' ? 0.35 : 0.18);
+  node.mesh.material.emissiveIntensity = on ? 0.85 : node.baseEmissive;
 }
 
 function pick(ev) {
   mouse.x = (ev.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(ev.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObjects(pickables, false);
-  return hits.length ? nodeById[hits[0].object.userData.nodeDef.id] : null;
+  const hitsN = raycaster.intersectObjects(pickables, false);
+  if (hitsN.length) return { node: nodeById[hitsN[0].object.userData.nodeDef.id], tube: null };
+  const hitsT = raycaster.intersectObjects(tubePickables, false);
+  if (hitsT.length) return { node: null, tube: hitsT[0].object };
+  return { node: null, tube: null };
 }
 
+function applyFocus(selectedId) {
+  const keep = selectedId ? adjacency[selectedId] : null;
+  for (const id in nodeById) {
+    const n = nodeById[id];
+    const dimmed = keep && id !== selectedId && !keep.has(id);
+    n.mesh.material.opacity = dimmed ? 0.22 : (n.def.cat === 'net' ? 0.85 : 1);
+    n.halo.material.opacity = dimmed ? 0.12 : 1;
+    n.label.fillOpacity = dimmed ? 0.1 : 1;
+    if (n.edge) n.edge.material.opacity = dimmed ? 0.12 : 0.9;
+    if (!keep || id === selectedId) n.mesh.material.emissiveIntensity = id === selectedId ? 0.85 : n.baseEmissive;
+    else n.mesh.material.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
+  }
+  for (const ls of linkStates) {
+    const involved = keep && (ls.def.a === selectedId || ls.def.b === selectedId);
+    ls.line.material.opacity = !keep ? ls.baseLineOpacity : involved ? 0.9 : 0.04;
+    ls.tubeMat.uniforms.uDim.value = !keep ? 1 : involved ? 1.5 : 0.05;
+    if (ls.label) ls.label.fillOpacity = !keep ? 1 : involved ? 1 : 0.05;
+  }
+}
+
+function flyToNode(node) {
+  const p = node.group.position.clone();
+  const dir = camera.position.clone().sub(p).normalize();
+  const camPos = p.clone().add(dir.multiplyScalar(8.5)).add(new THREE.Vector3(0, 1.6, 0));
+  const tgt = p.clone().add(new THREE.Vector3(0, 0.8, 0));
+  flyTo(camPos, tgt, 1.4);
+}
+
+function select(node) {
+  if (selected && selected !== node) setEmissive(selected, false);
+  selected = node;
+  controls.autoRotate = false;
+  clearTimeout(idleTimer);
+  setEmissive(node, true);
+  applyFocus(node.def.id);
+  flyToNode(node);
+  document.getElementById('info-name').textContent = node.def.label;
+  document.getElementById('info-cat').textContent =
+    CATEGORIES[node.def.cat].label + (node.def.site ? ` · site ${node.def.site}` : '');
+  document.getElementById('info-desc').textContent = node.def.desc;
+  document.getElementById('info-tags').innerHTML =
+    (node.def.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+  infoEl.classList.add('open');
+}
+
+function deselect() {
+  if (selected) setEmissive(selected, false);
+  selected = null;
+  infoEl.classList.remove('open');
+  applyFocus(null);
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (!selected) controls.autoRotate = true; }, 5000);
+}
+
+// click vs drag discrimination
+let downPos = null;
+renderer.domElement.addEventListener('pointerdown', ev => { downPos = [ev.clientX, ev.clientY]; });
+
 renderer.domElement.addEventListener('pointermove', ev => {
-  const n = pick(ev);
-  if (hovered && hovered !== n && hovered !== selected) setEmissive(hovered, false);
-  hovered = n;
-  if (hovered && hovered !== selected) setEmissive(hovered, true);
-  renderer.domElement.style.cursor = hovered ? 'pointer' : 'default';
+  const { node, tube } = pick(ev);
+  if (hoveredNode && hoveredNode !== node && hoveredNode !== selected) setEmissive(hoveredNode, false);
+  hoveredNode = node;
+  if (hoveredNode && hoveredNode !== selected) setEmissive(hoveredNode, true);
+
+  if (hoveredTube && hoveredTube !== tube) hoveredTube.material.uniforms.uBoost.value = 1;
+  hoveredTube = tube;
+  if (hoveredTube) hoveredTube.material.uniforms.uBoost.value = 2.4;
+
+  renderer.domElement.style.cursor = (hoveredNode || hoveredTube) ? 'pointer' : 'default';
 });
 
 renderer.domElement.addEventListener('click', ev => {
-  const n = pick(ev);
-  if (selected && selected !== n) setEmissive(selected, false);
-  selected = n;
-  if (!n) { infoEl.classList.remove('open'); return; }
-  setEmissive(n, true);
-  document.getElementById('info-name').textContent = n.def.label;
-  document.getElementById('info-cat').textContent =
-    CATEGORIES[n.def.cat].label + (n.def.site ? ` · site ${n.def.site}` : '');
-  document.getElementById('info-desc').textContent = n.def.desc;
-  document.getElementById('info-tags').innerHTML =
-    (n.def.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
-  infoEl.classList.add('open');
+  if (downPos && Math.hypot(ev.clientX - downPos[0], ev.clientY - downPos[1]) > 5) return; // was a drag
+  const { node } = pick(ev);
+  if (node) select(node);
+  else deselect();
 });
 
 /* ---------- post-processing ---------- */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.65, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.6, 0.85);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+
+// grade: vignette + film grain (LDR, after tone mapping)
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVignette: { value: 1.1 }, uGrain: { value: 0.05 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime, uVignette, uGrain;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + mod(uTime, 10.0) * 13.0) * 43758.5453); }
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 d = vUv - 0.5;
+      float v = smoothstep(0.95, 0.35, dot(d, d) * uVignette * 2.0);
+      c.rgb *= mix(0.72, 1.0, v);
+      c.rgb += (hash(vUv * vec2(1920.0, 1080.0)) - 0.5) * uGrain * 0.35;
+      gl_FragColor = c;
+    }
+  `,
+};
+const gradePass = new ShaderPass(GradeShader);
+composer.addPass(gradePass);
+
+const smaaPass = new SMAAPass(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio());
+composer.addPass(smaaPass);
 
 /* ---------- resize ---------- */
 window.addEventListener('resize', () => {
@@ -557,11 +740,30 @@ window.addEventListener('resize', () => {
 
 /* ---------- animate ---------- */
 const clock = new THREE.Clock();
+let fpsEMA = 60;
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+  fpsEMA += (1 / Math.max(dt, 1e-4) - fpsEMA) * 0.05;
+
+  // camera animation
+  if (camAnim) {
+    camAnim.t += dt / camAnim.dur;
+    const k = easeInOutCubic(Math.min(camAnim.t, 1));
+    camera.position.lerpVectors(camAnim.fromP, camAnim.toP, k);
+    controls.target.lerpVectors(camAnim.fromT, camAnim.toT, k);
+    camera.lookAt(controls.target);
+    if (camAnim.t >= 1) {
+      const done = camAnim.done;
+      camAnim = null;
+      controls.enabled = true;
+      if (done) done();
+    }
+  } else {
+    controls.update();
+  }
 
   // gentle node float + halo pulse
   for (const id in nodeById) {
@@ -572,26 +774,22 @@ function animate() {
     n.halo.scale.setScalar(s);
   }
 
-  // flow particles (respect layer visibility)
-  for (const f of flows) {
-    const visible = linkGroups[f.layer].visible;
-    const attr = f.geo.attributes.position;
-    for (let i = 0; i < f.speeds.length; i++) {
-      const p = f.speeds[i];
-      p.t = (p.t + p.v * dt) % 1;
-      const v = f.curve.getPoint(p.t);
-      attr.setXYZ(i, visible ? v.x : 0, visible ? v.y : -999, visible ? v.z : 0);
-    }
-    attr.needsUpdate = true;
-  }
+  // shader pulse time
+  for (const m of tubeMats) m.uniforms.uTime.value = t;
+  gradePass.uniforms.uTime.value = t;
 
-  controls.update();
   composer.render();
 }
 
 animate();
-window.__infraDebug = { nodeById, camera, controls, THREE, flows, linkGroups };
+window.__infraDebug = {
+  nodeById, camera, controls, THREE, linkGroups, linkStates, tubeMats,
+  get fps() { return fpsEMA; },
+};
 document.getElementById('loader').classList.add('done');
+
+// cinematic intro
+flyTo(HOME_CAM, HOME_TGT, 2.6, () => { controls.autoRotate = true; });
 </script>
 </body>
 </html>
