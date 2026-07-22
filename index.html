@@ -110,6 +110,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { Text } from 'troika-three-text';
 
 /* ============================================================
@@ -281,83 +282,66 @@ const SI_URL = slug => `https://cdn.jsdelivr.net/npm/simple-icons@15/icons/${slu
 
 const fontPromise = new FontLoader().loadAsync(FONT_URL);
 
-function roundRectPath(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-async function fetchIconPath(slug) {
+async function fetchIconSvg(slug) {
   try {
     const r = await fetch(SI_URL(slug));
-    if (!r.ok) return null;
-    const t = await r.text();
-    const m = t.match(/d="([^"]+)"/);
-    return m ? m[1] : null;
+    return r.ok ? await r.text() : null;
   } catch { return null; }
 }
 
 const SLUGS = [...new Set(NODES.map(n => n.icon).filter(s => s && s.length > 2))];
-const iconPaths = {};
-await Promise.all(SLUGS.map(async s => { iconPaths[s] = await fetchIconPath(s); }));
-
-function makeTileTexture(catColorHex, icon, pathD) {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 256;
-  const ctx = cv.getContext('2d');
-  const c = new THREE.Color(catColorHex);
-
-  // rounded-square glass tile background
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#' + c.clone().multiplyScalar(0.62).getHexString());
-  grad.addColorStop(1, '#' + c.clone().multiplyScalar(0.30).getHexString());
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // top highlight
-  const hl = ctx.createLinearGradient(0, 10, 0, 110);
-  hl.addColorStop(0, 'rgba(255,255,255,0.16)');
-  hl.addColorStop(1, 'rgba(255,255,255,0)');
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.fillStyle = hl;
-  ctx.fill();
-
-  // border
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.strokeStyle = '#' + c.clone().multiplyScalar(1.25).getHexString();
-  ctx.lineWidth = 5;
-  ctx.stroke();
-
-  // glyph
-  ctx.fillStyle = '#f4f8ff';
-  if (pathD) {
-    const p = new Path2D(pathD);
-    ctx.save();
-    ctx.translate(128, 128);
-    const s = 128 / 24;
-    ctx.scale(s, s);
-    ctx.translate(-12, -12);
-    ctx.fill(p);
-    ctx.restore();
-  } else {
-    ctx.font = '700 104px Menlo, Consolas, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(icon, 128, 134);
-  }
-
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
+const iconSvgs = {};
+await Promise.all(SLUGS.map(async s => { iconSvgs[s] = await fetchIconSvg(s); }));
 
 const FONT = await fontPromise;
+
+/* ---------- extruded logo geometry (cached per icon) ---------- */
+function makeMonogramGeo(letters) {
+  const geo = new TextGeometry(letters, {
+    font: FONT, size: 0.95, depth: 0.35, curveSegments: 2,
+    bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1,
+  });
+  return [geo];
+}
+
+const geoCache = {};
+function getIconGeos(icon) {
+  if (geoCache[icon]) return geoCache[icon];
+  let geos = null;
+  let flipY = true;
+  const svg = iconSvgs[icon];
+  if (svg) {
+    try {
+      const data = new SVGLoader().parse(svg);
+      geos = [];
+      for (const path of data.paths) {
+        for (const sh of path.toShapes(true)) {
+          geos.push(new THREE.ExtrudeGeometry(sh, {
+            depth: 0.35, bevelEnabled: true, curveSegments: 6,
+            bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1,
+          }));
+        }
+      }
+      if (!geos.length) geos = null;
+    } catch { geos = null; }
+  }
+  if (!geos) { geos = makeMonogramGeo(icon); flipY = false; }
+
+  // normalize: uniform scale to max dim 1.6, center at origin
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  for (const g of geos) { g.computeBoundingBox(); min.min(g.boundingBox.min); max.max(g.boundingBox.max); }
+  const size = new THREE.Vector3().subVectors(max, min);
+  const k = 1.6 / Math.max(size.x, size.y);
+  for (const g of geos) g.scale(k, k, k);
+  min.set(Infinity, Infinity, Infinity); max.set(-Infinity, -Infinity, -Infinity);
+  for (const g of geos) { g.computeBoundingBox(); min.min(g.boundingBox.min); max.max(g.boundingBox.max); }
+  const c = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
+  for (const g of geos) g.translate(-c.x, -c.y, -c.z);
+
+  geoCache[icon] = { geos, flipY };
+  return geoCache[icon];
+}
 
 /* ============================================================
    SCENE SETUP
@@ -461,18 +445,18 @@ const grid = new THREE.GridHelper(90, 45, 0x1c2a4a, 0x101a30);
 grid.position.y = -0.02;
 scene.add(grid);
 
-/* ---------- billboards (tiles + 3D labels face camera) ---------- */
+/* ---------- billboards (only labels face camera; shapes stay fixed) ---------- */
 const billboards = [];
 
 /* ---------- extruded 3D labels ---------- */
 function makeLabel3D(text, { size = 0.34, depth = 0.055, frontColor = 0xeaf2ff, sideColor = 0x2c3a58 } = {}) {
   const geo = new TextGeometry(text, {
     font: FONT, size, depth,
-    curveSegments: 3,
+    curveSegments: 2,
     bevelEnabled: true,
     bevelThickness: size * 0.045,
     bevelSize: size * 0.028,
-    bevelSegments: 2,
+    bevelSegments: 1,
   });
   geo.computeBoundingBox();
   const bb = geo.boundingBox;
@@ -527,7 +511,7 @@ function makePlatform(cx, cz, w, d, color, label) {
 makePlatform(-12.2, -1.5, 13.5, 13.5, 0x4f8cff, 'SITE A · NAS HUB');
 makePlatform(9.75, -4, 7.5, 8.5, 0x2fe6a8, 'SITE B · SATELLITE');
 
-/* ---------- nodes (icon tiles) ---------- */
+/* ---------- nodes (extruded logo shapes, fixed in 3D) ---------- */
 const nodeById = {};
 const pickables = [];
 
@@ -535,63 +519,58 @@ function makeNode(def) {
   const cat = CATEGORIES[def.cat];
   const isOverlay = def.cat === 'net';
   const group = new THREE.Group();
-  const billboard = new THREE.Group();
-  group.add(billboard);
 
-  // tile body
-  const tileMat = new THREE.MeshStandardMaterial({
-    color: 0x0d1526, roughness: 0.35, metalness: 0.5,
-    emissive: cat.color, emissiveIntensity: 0.10, transparent: true,
+  // extruded logo geometry (shared cache), fixed orientation
+  const { geos, flipY } = getIconGeos(def.icon);
+  const holder = new THREE.Group();
+  const frontMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(cat.color).multiplyScalar(1.15),
+    emissive: cat.color, emissiveIntensity: 0.22,
+    roughness: 0.35, metalness: 0.45, transparent: true,
+    side: THREE.DoubleSide, // required: holder scale.y=-1 flips winding (raycast culling)
+  });
+  const sideMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(cat.color).multiplyScalar(0.45),
+    roughness: 0.55, metalness: 0.35, transparent: true,
     side: THREE.DoubleSide,
   });
-  const tile = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.16), tileMat);
-  billboard.add(tile);
-
-  // icon face (double-sided so floor reflection shows it)
-  const tex = makeTileTexture(cat.color, def.icon, iconPaths[def.icon]);
-  const iconMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  const iconPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), iconMat);
-  iconPlane.position.z = 0.085;
-  billboard.add(iconPlane);
-
-  // edge glow
-  const edge = new THREE.LineSegments(
-    new THREE.EdgesGeometry(tile.geometry),
-    new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.9 })
-  );
-  edge.scale.setScalar(1.002);
-  billboard.add(edge);
+  for (const g of geos) {
+    const m = new THREE.Mesh(g, [frontMat, sideMat]);
+    m.userData.nodeDef = def;
+    pickables.push(m);
+    holder.add(m);
+  }
+  if (flipY) holder.scale.y = -1; // SVG y-down → upright; renderer flips winding
+  if (isOverlay) holder.scale.multiplyScalar(1.22);
+  group.add(holder);
 
   // glow halo
   const halo = makeGlowSprite(cat.color);
   halo.scale.setScalar(isOverlay ? 3.2 : 2.6);
   group.add(halo);
 
-  // extruded 3D label
+  // extruded 3D label — billboarded for readability
   const l3d = makeLabel3D(def.label, {
     size: isOverlay ? 0.4 : 0.34,
     frontColor: def.cat === 'client' ? 0xffffff : 0xeaf2ff,
     sideColor: new THREE.Color(cat.color).multiplyScalar(0.45).getHex(),
   });
-  l3d.mesh.position.y = isOverlay ? 1.55 : 1.3;
-  billboard.add(l3d.mesh);
-
-  if (isOverlay) billboard.scale.setScalar(1.22);
+  const labelBb = new THREE.Group();
+  labelBb.add(l3d.mesh);
+  labelBb.position.y = isOverlay ? 1.7 : 1.35;
+  group.add(labelBb);
+  billboards.push(labelBb);
 
   group.position.fromArray(def.pos);
   scene.add(group);
-  billboards.push(billboard);
 
-  tile.userData.nodeDef = def;
-  pickables.push(tile);
   nodeById[def.id] = {
-    def, group, billboard, mesh: tile, edge, halo,
+    def, group, holder, frontMat, sideMat, halo,
     baseY: def.pos[1],
-    baseEmissive: 0.10,
+    baseEmissive: 0.22,
     dimMats: [
-      { mat: tileMat, base: 1 },
-      { mat: iconMat, base: 1 },
-      { mat: edge.material, base: 0.9 },
+      { mat: frontMat, base: 1 },
+      { mat: sideMat, base: 1 },
       { mat: halo.material, base: 1 },
       { mat: l3d.mats[0], base: 1 },
       { mat: l3d.mats[1], base: 1 },
@@ -730,7 +709,7 @@ const infoEl = document.getElementById('info');
 document.getElementById('info-close').addEventListener('click', () => deselect());
 
 function setEmissive(node, on) {
-  node.mesh.material.emissiveIntensity = on ? 0.5 : node.baseEmissive;
+  node.frontMat.emissiveIntensity = on ? 0.6 : node.baseEmissive;
 }
 
 function pick(ev) {
@@ -751,7 +730,7 @@ function applyFocus(selectedId) {
     const dimmed = keep && id !== selectedId && !keep.has(id);
     const f = dimmed ? 0.15 : 1;
     for (const dm of n.dimMats) dm.mat.opacity = dm.base * f;
-    if (id !== selectedId) n.mesh.material.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
+    if (id !== selectedId) n.frontMat.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
   }
   for (const ls of linkStates) {
     const involved = keep && (ls.def.a === selectedId || ls.def.b === selectedId);
