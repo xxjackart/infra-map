@@ -108,8 +108,6 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
-import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { Text } from 'troika-three-text';
 
 /* ============================================================
@@ -135,93 +133,93 @@ const LAYERS = {
   dns:        { label: 'DNS resolution',          color: 0x39d0d8 },
 };
 
-// icon: simple-icons slug (jsdelivr) OR monogram letters
+// pos: [x, y, z] — Site A platform left, Site B right, clients far-left, external top-right
 const NODES = [
   // --- network overlay (center) ---
-  { id: 'tailnet',  cat: 'net', label: 'Tailscale mesh', icon: 'tailscale', pos: [0, 6.4, 0],
+  { id: 'tailnet',  cat: 'net', label: 'Tailscale mesh', pos: [0, 6.4, 0],
     desc: 'Mesh VPN (WireGuard-based). Identity instead of addresses: every node gets an overlay identity, NAT traversal automatic, E2E encryption between nodes.',
     tags: ['WireGuard', 'Magic DNS', 'E2E'] },
-  { id: 'wgtunnel', cat: 'net', label: 'L3 site-to-site', icon: 'wireguard', pos: [0, 3.4, 3.2],
+  { id: 'wgtunnel', cat: 'net', label: 'L3 site-to-site', pos: [0, 3.4, 3.2],
     desc: 'Router-level WireGuard tunnel between the two LANs. Full bidirectional IP routing between sites — independent of the node-to-node overlay.',
     tags: ['site-to-site', 'routing'] },
 
   // --- Site A (hub) — grid 4 columns × 4 rows ---
-  { id: 'openwebui', cat: 'core', label: 'OpenWebUI', icon: 'OW', site: 'A', pos: [-17, 1.0, 3.3],
+  { id: 'openwebui', cat: 'core', label: 'OpenWebUI', site: 'A', pos: [-17, 1.0, 3.3],
     desc: 'Knowledge base hub + RAG front-end. OpenAI-compatible API, ~30 thematic knowledge collections, chat interface for local agents.',
     tags: ['RAG', 'knowledge base'] },
-  { id: 'n8n', cat: 'core', label: 'n8n', icon: 'n8n', site: 'A', pos: [-13.8, 1.0, 3.3],
+  { id: 'n8n', cat: 'core', label: 'n8n', site: 'A', pos: [-13.8, 1.0, 3.3],
     desc: 'Workflow orchestrator — the ETL backbone. RSS/YouTube/voice/receipt ingestion, AI scoring, dedup, KB upload, backups, mail processing.',
     tags: ['ETL', 'automation', '32 workflows'] },
-  { id: 'redmine', cat: 'core', label: 'Redmine', icon: 'redmine', site: 'A', pos: [-10.6, 1.0, 3.3],
+  { id: 'redmine', cat: 'core', label: 'Redmine', site: 'A', pos: [-10.6, 1.0, 3.3],
     desc: 'Task & project tracker — the single source of truth for work items, wiki documentation and time tracking.',
     tags: ['source of truth', 'wiki'] },
-  { id: 'postgres', cat: 'data', label: 'PostgreSQL', icon: 'postgresql', site: 'A', pos: [-7.4, 1.0, 3.3],
+  { id: 'postgres', cat: 'data', label: 'PostgreSQL', site: 'A', pos: [-7.4, 1.0, 3.3],
     desc: 'Relational database for application data and analytics (expenses). Backs Redmine and Grafana dashboards.',
     tags: ['SQL', 'analytics'] },
-  { id: 'qdrant', cat: 'data', label: 'Qdrant', icon: 'Q', site: 'A', pos: [-17, 1.0, 0.1],
+  { id: 'qdrant', cat: 'data', label: 'Qdrant', site: 'A', pos: [-17, 1.0, 0.1],
     desc: 'Vector database. Embeddings for semantic search (RAG) + distributed lock/dedup store for ingestion pipelines (Qdrant Lock Pattern).',
     tags: ['vector DB', 'embeddings', 'dedup'] },
-  { id: 'grafana', cat: 'mon', label: 'Grafana', icon: 'grafana', site: 'A', pos: [-13.8, 1.0, 0.1],
+  { id: 'grafana', cat: 'mon', label: 'Grafana', site: 'A', pos: [-13.8, 1.0, 0.1],
     desc: 'Dashboards: system, containers, DNS, databases, workflow metrics, knowledge-base stats.',
     tags: ['dashboards'] },
-  { id: 'prometheus', cat: 'mon', label: 'Prometheus', icon: 'prometheus', site: 'A', pos: [-10.6, 1.0, 0.1],
+  { id: 'prometheus', cat: 'mon', label: 'Prometheus', site: 'A', pos: [-10.6, 1.0, 0.1],
     desc: 'Metrics TSDB. Scrapes node/container/DNS/app exporters every 60s, 30-day retention, alert rules.',
     tags: ['metrics', 'alerts'] },
-  { id: 'kumaA', cat: 'mon', label: 'Uptime Kuma', icon: 'uptimekuma', site: 'A', pos: [-7.4, 1.0, 0.1],
+  { id: 'kumaA', cat: 'mon', label: 'Uptime Kuma', site: 'A', pos: [-7.4, 1.0, 0.1],
     desc: 'Uptime monitor — instance 1 of a failover pair. Watches all tailnet services every 60s.',
     tags: ['uptime', 'failover pair'] },
-  { id: 'piholeA', cat: 'dns', label: 'Pi-hole', icon: 'pihole', site: 'A', pos: [-17, 1.0, -3.1],
+  { id: 'piholeA', cat: 'dns', label: 'Pi-hole', site: 'A', pos: [-17, 1.0, -3.1],
     desc: 'Network-wide ad/telemetry blocking at DNS level — covers devices that cannot run blockers (TV, speakers, IoT).',
     tags: ['ad-blocking', 'DNS'] },
-  { id: 'unboundA', cat: 'dns', label: 'Unbound', icon: 'UB', site: 'A', pos: [-13.8, 1.0, -3.1],
+  { id: 'unboundA', cat: 'dns', label: 'Unbound', site: 'A', pos: [-13.8, 1.0, -3.1],
     desc: 'Recursive, validating (DNSSEC), caching resolver. Queries authoritative nameservers directly — no third-party DNS sees the full picture.',
     tags: ['recursive', 'DNSSEC'] },
-  { id: 'haA', cat: 'iot', label: 'Home Assistant', icon: 'homeassistant', site: 'A', pos: [-10.6, 1.0, -3.1],
+  { id: 'haA', cat: 'iot', label: 'Home Assistant', site: 'A', pos: [-10.6, 1.0, -3.1],
     desc: 'Home automation instance (site A). Entities, automations, dashboards; paired with the site B instance.',
     tags: ['automation'] },
-  { id: 'homepage', cat: 'mon', label: 'Homepage', icon: 'homepage', site: 'A', pos: [-7.4, 1.0, -3.1],
+  { id: 'homepage', cat: 'mon', label: 'Homepage', site: 'A', pos: [-7.4, 1.0, -3.1],
     desc: 'Start-page dashboard aggregating all services with live widgets.',
     tags: ['dashboard'] },
-  { id: 'infisical', cat: 'sec', label: 'Infisical', icon: 'IS', site: 'A', pos: [-17, 1.0, -6.3],
+  { id: 'infisical', cat: 'sec', label: 'Infisical', site: 'A', pos: [-17, 1.0, -6.3],
     desc: 'Secrets management — single source of truth for API keys and tokens. Injected into local tools at launch; rotation happens in exactly one place.',
     tags: ['secrets', 'injection'] },
-  { id: 'caddy', cat: 'sec', label: 'Caddy', icon: 'caddy', site: 'A', pos: [-13.8, 1.0, -6.3],
+  { id: 'caddy', cat: 'sec', label: 'Caddy', site: 'A', pos: [-13.8, 1.0, -6.3],
     desc: 'Reverse proxy / gateway with automatic certificates. Edge routing for selected services.',
     tags: ['reverse proxy', 'TLS'] },
-  { id: 'abs', cat: 'core', label: 'Audiobookshelf', icon: 'audiobookshelf', site: 'A', pos: [-10.6, 1.0, -6.3],
+  { id: 'abs', cat: 'core', label: 'Audiobookshelf', site: 'A', pos: [-10.6, 1.0, -6.3],
     desc: 'Self-hosted audiobook & podcast server with mobile apps.',
     tags: ['media'] },
 
   // --- Site B (satellite) ---
-  { id: 'piholeB', cat: 'dns', label: 'Pi-hole', icon: 'pihole', site: 'B', pos: [8.5, 1.0, -2.5],
+  { id: 'piholeB', cat: 'dns', label: 'Pi-hole', site: 'B', pos: [8.5, 1.0, -2.5],
     desc: 'Site B ad-blocking DNS. Same role, fully independent — each site keeps resolving if the other goes down.',
     tags: ['ad-blocking', 'DNS'] },
-  { id: 'unboundB', cat: 'dns', label: 'Unbound', icon: 'UB', site: 'B', pos: [8.5, 1.0, -5.5],
+  { id: 'unboundB', cat: 'dns', label: 'Unbound', site: 'B', pos: [8.5, 1.0, -5.5],
     desc: 'Site B recursive resolver (DNSSEC). Mirrors the site A resolver chain.',
     tags: ['recursive', 'DNSSEC'] },
-  { id: 'haB', cat: 'iot', label: 'Home Assistant', icon: 'homeassistant', site: 'B', pos: [11.5, 1.0, -2.5],
+  { id: 'haB', cat: 'iot', label: 'Home Assistant', site: 'B', pos: [11.5, 1.0, -2.5],
     desc: 'Primary home automation instance — ~350 entities, Zigbee/Thread border router, voice-assistant integrations.',
     tags: ['automation', 'Zigbee', 'Thread'] },
-  { id: 'kumaB', cat: 'mon', label: 'Uptime Kuma', icon: 'uptimekuma', site: 'B', pos: [11.5, 1.0, -5.5],
+  { id: 'kumaB', cat: 'mon', label: 'Uptime Kuma', site: 'B', pos: [11.5, 1.0, -5.5],
     desc: 'Uptime monitor — instance 2 of the failover pair. The watchdog must not die with what it watches.',
     tags: ['uptime', 'failover pair'] },
 
   // --- clients ---
-  { id: 'workstation', cat: 'client', label: 'Workstation', icon: 'WS', pos: [-20, 5.5, 6],
+  { id: 'workstation', cat: 'client', label: 'Workstation', pos: [-20, 5.5, 6],
     desc: 'Daily driver. Runs the agent CLI (Open Code) as the hub of the MCP ecosystem, plus offline speech-to-text (Superwhisper) and local LLMs.',
     tags: ['Open Code', 'MCP hub', 'STT offline'] },
-  { id: 'mobile', cat: 'client', label: 'Mobile devices', icon: 'MD', pos: [-20, 3.0, 9],
+  { id: 'mobile', cat: 'client', label: 'Mobile devices', pos: [-20, 3.0, 9],
     desc: 'Phone / tablet / TV — reach every service over the mesh overlay. No ports exposed to the public internet.',
     tags: ['remote access'] },
 
   // --- external ---
-  { id: 'llm', cat: 'ext', label: 'LLM providers', icon: 'AI', pos: [16, 7.5, 6],
+  { id: 'llm', cat: 'ext', label: 'LLM providers', pos: [16, 7.5, 6],
     desc: 'External language-model APIs (DeepSeek family). Used for scoring and synthesis of non-sensitive content; private data stays in-network.',
     tags: ['DeepSeek', 'API'] },
-  { id: 'sources', cat: 'ext', label: 'Content sources', icon: 'rss', pos: [20, 5.0, 1],
+  { id: 'sources', cat: 'ext', label: 'Content sources', pos: [20, 5.0, 1],
     desc: 'RSS feeds, YouTube playlists, e-mail — raw material for the ingestion pipelines.',
     tags: ['RSS', 'YouTube', 'mail'] },
-  { id: 'rootdns', cat: 'ext', label: 'Root / auth NS', icon: 'NS', pos: [4, 7.5, -9],
+  { id: 'rootdns', cat: 'ext', label: 'Root / auth NS', pos: [4, 7.5, -9],
     desc: 'Root and authoritative nameservers — the end of the recursive resolver chain.',
     tags: ['DNS'] },
 ];
@@ -272,92 +270,6 @@ const LINKS = [
   { a: 'unboundA', b: 'rootdns', layer: 'dns', label: 'recursion' },
   { a: 'unboundB', b: 'rootdns', layer: 'dns', label: 'recursion' },
 ];
-
-/* ============================================================
-   ASSET LOADING (font + icon textures) — loader visible
-   ============================================================ */
-const FONT_URL = 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/fonts/droid/droid_sans_mono_regular.typeface.json';
-const SI_URL = slug => `https://cdn.jsdelivr.net/npm/simple-icons@15/icons/${slug}.svg`;
-
-const fontPromise = new FontLoader().loadAsync(FONT_URL);
-
-function roundRectPath(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-async function fetchIconPath(slug) {
-  try {
-    const r = await fetch(SI_URL(slug));
-    if (!r.ok) return null;
-    const t = await r.text();
-    const m = t.match(/d="([^"]+)"/);
-    return m ? m[1] : null;
-  } catch { return null; }
-}
-
-const SLUGS = [...new Set(NODES.map(n => n.icon).filter(s => s && s.length > 2))];
-const iconPaths = {};
-await Promise.all(SLUGS.map(async s => { iconPaths[s] = await fetchIconPath(s); }));
-
-function makeTileTexture(catColorHex, icon, pathD) {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 256;
-  const ctx = cv.getContext('2d');
-  const c = new THREE.Color(catColorHex);
-
-  // rounded-square glass tile background
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#' + c.clone().multiplyScalar(0.62).getHexString());
-  grad.addColorStop(1, '#' + c.clone().multiplyScalar(0.30).getHexString());
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // top highlight
-  const hl = ctx.createLinearGradient(0, 10, 0, 110);
-  hl.addColorStop(0, 'rgba(255,255,255,0.16)');
-  hl.addColorStop(1, 'rgba(255,255,255,0)');
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.fillStyle = hl;
-  ctx.fill();
-
-  // border
-  roundRectPath(ctx, 10, 10, 236, 236, 46);
-  ctx.strokeStyle = '#' + c.clone().multiplyScalar(1.25).getHexString();
-  ctx.lineWidth = 5;
-  ctx.stroke();
-
-  // glyph
-  ctx.fillStyle = '#f4f8ff';
-  if (pathD) {
-    const p = new Path2D(pathD);
-    ctx.save();
-    ctx.translate(128, 128);
-    const s = 128 / 24;
-    ctx.scale(s, s);
-    ctx.translate(-12, -12);
-    ctx.fill(p);
-    ctx.restore();
-  } else {
-    ctx.font = '700 104px Menlo, Consolas, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(icon, 128, 134);
-  }
-
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-const FONT = await fontPromise;
 
 /* ============================================================
    SCENE SETUP
@@ -461,44 +373,16 @@ const grid = new THREE.GridHelper(90, 45, 0x1c2a4a, 0x101a30);
 grid.position.y = -0.02;
 scene.add(grid);
 
-/* ---------- billboards (tiles + 3D labels face camera) ---------- */
-const billboards = [];
-
-/* ---------- extruded 3D labels ---------- */
-function makeLabel3D(text, { size = 0.34, depth = 0.055, frontColor = 0xeaf2ff, sideColor = 0x2c3a58 } = {}) {
-  const geo = new TextGeometry(text, {
-    font: FONT, size, depth,
-    curveSegments: 3,
-    bevelEnabled: true,
-    bevelThickness: size * 0.045,
-    bevelSize: size * 0.028,
-    bevelSegments: 2,
-  });
-  geo.computeBoundingBox();
-  const bb = geo.boundingBox;
-  const w = bb.max.x - bb.min.x;
-  geo.translate(-bb.min.x - w / 2, 0, 0);
-  const frontMat = new THREE.MeshStandardMaterial({
-    color: frontColor, emissive: 0x8fb4ff, emissiveIntensity: 0.30,
-    roughness: 0.3, metalness: 0.2, transparent: true,
-  });
-  const sideMat = new THREE.MeshStandardMaterial({
-    color: sideColor, roughness: 0.55, metalness: 0.3, transparent: true,
-  });
-  const mesh = new THREE.Mesh(geo, [frontMat, sideMat]);
-  return { mesh, mats: [frontMat, sideMat] };
-}
-
-/* ---------- SDF text (small utility labels) ---------- */
+/* ---------- SDF text labels (troika) ---------- */
 const LABEL_FONT = 'https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.2.5/files/ibm-plex-mono-latin-500-normal.woff';
-function makeSDFLabel(text, { size = 0.26, color = '#8fa3cc' } = {}) {
+function makeLabel(text, { size = 0.36, color = '#cfe0ff', anchorY = 'bottom' } = {}) {
   const t = new Text();
   t.text = text;
   t.font = LABEL_FONT;
   t.fontSize = size;
   t.color = new THREE.Color(color);
   t.anchorX = 'center';
-  t.anchorY = 'bottom';
+  t.anchorY = anchorY;
   t.outlineWidth = 0.022;
   t.outlineColor = new THREE.Color(0x05070d);
   t.outlineOpacity = 0.9;
@@ -519,83 +403,79 @@ function makePlatform(cx, cz, w, d, color, label) {
   );
   edges.position.copy(m.position);
   scene.add(edges);
-  const l3d = makeLabel3D(label, { size: 0.95, depth: 0.12, frontColor: 0xc8d4ee, sideColor: 0x27334e });
-  l3d.mesh.position.set(cx, 0.65, cz + d / 2 + 1.1);
-  scene.add(l3d.mesh);
-  billboards.push(l3d.mesh);
+  const sprite = makeLabel(label, { size: 1.05, color: '#aebadb' });
+  sprite.position.set(cx, 0.65, cz + d / 2 + 1.1);
+  scene.add(sprite);
 }
 makePlatform(-12.2, -1.5, 13.5, 13.5, 0x4f8cff, 'SITE A · NAS HUB');
 makePlatform(9.75, -4, 7.5, 8.5, 0x2fe6a8, 'SITE B · SATELLITE');
 
-/* ---------- nodes (icon tiles) ---------- */
+/* ---------- nodes ---------- */
 const nodeById = {};
 const pickables = [];
 
+function injectFresnel(mat, colorHex, strength) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uRimColor = { value: new THREE.Color(colorHex) };
+    shader.uniforms.uRimPower = { value: 2.4 };
+    shader.uniforms.uRimStrength = { value: strength };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform vec3 uRimColor;\nuniform float uRimPower;\nuniform float uRimStrength;\nvoid main() {')
+      .replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n' +
+        '  float rimF = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), uRimPower);\n' +
+        '  totalEmissiveRadiance += uRimColor * rimF * uRimStrength;\n');
+  };
+  mat.customProgramCacheKey = () => 'fresnel-rim';
+}
+
 function makeNode(def) {
   const cat = CATEGORIES[def.cat];
-  const isOverlay = def.cat === 'net';
   const group = new THREE.Group();
-  const billboard = new THREE.Group();
-  group.add(billboard);
 
-  // tile body
-  const tileMat = new THREE.MeshStandardMaterial({
-    color: 0x0d1526, roughness: 0.35, metalness: 0.5,
-    emissive: cat.color, emissiveIntensity: 0.10, transparent: true,
-    side: THREE.DoubleSide,
+  const isOverlay = def.cat === 'net';
+  const geo = isOverlay
+    ? new THREE.IcosahedronGeometry(0.65, 1)
+    : new THREE.BoxGeometry(1.35, 1.35, 1.35);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: cat.color, roughness: 0.32, metalness: 0.55,
+    emissive: cat.color, emissiveIntensity: isOverlay ? 0.35 : 0.18,
+    transparent: true, opacity: isOverlay ? 0.85 : 1,
+    wireframe: isOverlay,
   });
-  const tile = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.16), tileMat);
-  billboard.add(tile);
+  if (!isOverlay) injectFresnel(mat, cat.color, 0.85);
+  const mesh = new THREE.Mesh(geo, mat);
+  group.add(mesh);
 
-  // icon face (double-sided so floor reflection shows it)
-  const tex = makeTileTexture(cat.color, def.icon, iconPaths[def.icon]);
-  const iconMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  const iconPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), iconMat);
-  iconPlane.position.z = 0.085;
-  billboard.add(iconPlane);
-
-  // edge glow
-  const edge = new THREE.LineSegments(
-    new THREE.EdgesGeometry(tile.geometry),
-    new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.9 })
-  );
-  edge.scale.setScalar(1.002);
-  billboard.add(edge);
+  let edge = null;
+  if (!isOverlay) {
+    edge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.9 })
+    );
+    edge.scale.setScalar(1.002);
+    group.add(edge);
+  }
 
   // glow halo
   const halo = makeGlowSprite(cat.color);
-  halo.scale.setScalar(isOverlay ? 3.2 : 2.6);
+  halo.scale.setScalar(isOverlay ? 3.0 : 2.5);
   group.add(halo);
 
-  // extruded 3D label
-  const l3d = makeLabel3D(def.label, {
-    size: isOverlay ? 0.4 : 0.34,
-    frontColor: def.cat === 'client' ? 0xffffff : 0xeaf2ff,
-    sideColor: new THREE.Color(cat.color).multiplyScalar(0.45).getHex(),
-  });
-  l3d.mesh.position.y = isOverlay ? 1.55 : 1.3;
-  billboard.add(l3d.mesh);
-
-  if (isOverlay) billboard.scale.setScalar(1.22);
+  const label = makeLabel(def.label, { color: def.cat === 'client' ? '#ffffff' : '#cfe0ff' });
+  label.position.y = isOverlay ? 1.7 : 1.45;
+  group.add(label);
 
   group.position.fromArray(def.pos);
   scene.add(group);
-  billboards.push(billboard);
 
-  tile.userData.nodeDef = def;
-  pickables.push(tile);
+  mesh.userData.nodeDef = def;
+  pickables.push(mesh);
   nodeById[def.id] = {
-    def, group, billboard, mesh: tile, edge, halo,
+    def, group, mesh, edge, halo, label,
     baseY: def.pos[1],
-    baseEmissive: 0.10,
-    dimMats: [
-      { mat: tileMat, base: 1 },
-      { mat: iconMat, base: 1 },
-      { mat: edge.material, base: 0.9 },
-      { mat: halo.material, base: 1 },
-      { mat: l3d.mats[0], base: 1 },
-      { mat: l3d.mats[1], base: 1 },
-    ],
+    baseEmissive: isOverlay ? 0.35 : 0.18,
   };
   return nodeById[def.id];
 }
@@ -664,7 +544,7 @@ function makeLink(def) {
   if (def.dashed) line.computeLineDistances();
   linkGroups[def.layer].add(line);
 
-  // glow pulse tube
+  // glow pulse tube (replaces old flow particles)
   const tubeMat = new THREE.ShaderMaterial({
     vertexShader: tubeVert, fragmentShader: tubeFrag,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -684,7 +564,7 @@ function makeLink(def) {
 
   let label = null;
   if (def.label) {
-    label = makeSDFLabel(def.label, { size: 0.26, color: '#8fa3cc' });
+    label = makeLabel(def.label, { size: 0.26, color: '#8fa3cc' });
     label.position.copy(curve.getPoint(0.5));
     label.position.y += 0.55;
     linkGroups[def.layer].add(label);
@@ -730,7 +610,7 @@ const infoEl = document.getElementById('info');
 document.getElementById('info-close').addEventListener('click', () => deselect());
 
 function setEmissive(node, on) {
-  node.mesh.material.emissiveIntensity = on ? 0.5 : node.baseEmissive;
+  node.mesh.material.emissiveIntensity = on ? 0.85 : node.baseEmissive;
 }
 
 function pick(ev) {
@@ -749,9 +629,12 @@ function applyFocus(selectedId) {
   for (const id in nodeById) {
     const n = nodeById[id];
     const dimmed = keep && id !== selectedId && !keep.has(id);
-    const f = dimmed ? 0.15 : 1;
-    for (const dm of n.dimMats) dm.mat.opacity = dm.base * f;
-    if (id !== selectedId) n.mesh.material.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
+    n.mesh.material.opacity = dimmed ? 0.22 : (n.def.cat === 'net' ? 0.85 : 1);
+    n.halo.material.opacity = dimmed ? 0.12 : 1;
+    n.label.fillOpacity = dimmed ? 0.1 : 1;
+    if (n.edge) n.edge.material.opacity = dimmed ? 0.12 : 0.9;
+    if (!keep || id === selectedId) n.mesh.material.emissiveIntensity = id === selectedId ? 0.85 : n.baseEmissive;
+    else n.mesh.material.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
   }
   for (const ls of linkStates) {
     const involved = keep && (ls.def.a === selectedId || ls.def.b === selectedId);
@@ -886,15 +769,12 @@ function animate() {
     controls.update();
   }
 
-  // billboards face camera
-  for (const b of billboards) b.quaternion.copy(camera.quaternion);
-
   // gentle node float + halo pulse
   for (const id in nodeById) {
     const n = nodeById[id];
     const phase = id.length * 1.37;
     n.group.position.y = n.baseY + Math.sin(t * 0.9 + phase) * 0.09;
-    const s = (n.def.cat === 'net' ? 3.2 : 2.6) * (1 + Math.sin(t * 1.6 + phase) * 0.07);
+    const s = (n.def.cat === 'net' ? 3.0 : 2.5) * (1 + Math.sin(t * 1.6 + phase) * 0.07);
     n.halo.scale.setScalar(s);
   }
 
@@ -907,7 +787,7 @@ function animate() {
 
 animate();
 window.__infraDebug = {
-  nodeById, camera, controls, THREE, linkGroups, linkStates, tubeMats, billboards,
+  nodeById, camera, controls, THREE, linkGroups, linkStates, tubeMats,
   get fps() { return fpsEMA; },
 };
 document.getElementById('loader').classList.add('done');
