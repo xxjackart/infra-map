@@ -298,8 +298,8 @@ const FONT = await fontPromise;
 /* ---------- extruded logo geometry (cached per icon) ---------- */
 function makeMonogramGeo(letters) {
   const geo = new TextGeometry(letters, {
-    font: FONT, size: 0.95, depth: 0.55, curveSegments: 2,
-    bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.035, bevelSegments: 1,
+    font: FONT, size: 0.95, depth: 0.35, curveSegments: 2,
+    bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1,
   });
   return [geo];
 }
@@ -317,8 +317,8 @@ function getIconGeos(icon) {
       for (const path of data.paths) {
         for (const sh of path.toShapes(true)) {
           geos.push(new THREE.ExtrudeGeometry(sh, {
-            depth: 0.55, bevelEnabled: true, curveSegments: 6,
-            bevelThickness: 0.05, bevelSize: 0.035, bevelSegments: 1,
+            depth: 0.35, bevelEnabled: true, curveSegments: 6,
+            bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1,
           }));
         }
       }
@@ -334,12 +334,6 @@ function getIconGeos(icon) {
   const size = new THREE.Vector3().subVectors(max, min);
   const k = 1.6 / Math.max(size.x, size.y);
   for (const g of geos) g.scale(k, k, k);
-  // scale depth independently to real 0.55 world units (SVG units would normalize depth away)
-  min.set(Infinity, Infinity, Infinity); max.set(-Infinity, -Infinity, -Infinity);
-  for (const g of geos) { g.computeBoundingBox(); min.min(g.boundingBox.min); max.max(g.boundingBox.max); }
-  const zSpan = Math.max(max.z - min.z, 1e-6);
-  const zK = 0.55 / zSpan;
-  for (const g of geos) g.scale(1, 1, zK);
   min.set(Infinity, Infinity, Infinity); max.set(-Infinity, -Infinity, -Infinity);
   for (const g of geos) { g.computeBoundingBox(); min.min(g.boundingBox.min); max.max(g.boundingBox.max); }
   const c = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
@@ -404,12 +398,12 @@ controls.addEventListener('end', () => {
   if (!selected) idleTimer = setTimeout(() => controls.autoRotate = true, 5000);
 });
 
-// lights — stronger directional shading for 3D depth
-scene.add(new THREE.AmbientLight(0x8899cc, 0.42));
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+// lights
+scene.add(new THREE.AmbientLight(0x8899cc, 0.55));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
 keyLight.position.set(12, 24, 10);
 scene.add(keyLight);
-const rimLight = new THREE.DirectionalLight(0x4f8cff, 0.75);
+const rimLight = new THREE.DirectionalLight(0x4f8cff, 0.5);
 rimLight.position.set(-14, 10, -16);
 scene.add(rimLight);
 
@@ -531,8 +525,8 @@ function makeNode(def) {
   const holder = new THREE.Group();
   const frontMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(cat.color).multiplyScalar(1.15),
-    emissive: cat.color, emissiveIntensity: 0.12,
-    roughness: 0.3, metalness: 0.55, transparent: true,
+    emissive: cat.color, emissiveIntensity: 0.22,
+    roughness: 0.35, metalness: 0.45, transparent: true,
     side: THREE.DoubleSide, // required: holder scale.y=-1 flips winding (raycast culling)
   });
   const sideMat = new THREE.MeshStandardMaterial({
@@ -550,18 +544,9 @@ function makeNode(def) {
   if (isOverlay) holder.scale.multiplyScalar(1.22);
   group.add(holder);
 
-  // invisible hit-proxy (wordmark glyphs have gaps — bbox center may be empty)
-  const hitProxy = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 1.8, 0.8),
-    new THREE.MeshBasicMaterial({ visible: false })
-  );
-  hitProxy.userData.nodeDef = def;
-  pickables.push(hitProxy);
-  group.add(hitProxy);
-
-  // glow halo — subtle
+  // glow halo
   const halo = makeGlowSprite(cat.color);
-  halo.scale.setScalar(isOverlay ? 2.1 : 1.7);
+  halo.scale.setScalar(isOverlay ? 3.2 : 2.6);
   group.add(halo);
 
   // extruded 3D label — billboarded for readability
@@ -582,7 +567,7 @@ function makeNode(def) {
   nodeById[def.id] = {
     def, group, holder, frontMat, sideMat, halo,
     baseY: def.pos[1],
-    baseEmissive: 0.12,
+    baseEmissive: 0.22,
     dimMats: [
       { mat: frontMat, base: 1 },
       { mat: sideMat, base: 1 },
@@ -600,8 +585,8 @@ function makeGlowSprite(color) {
   const ctx = cv.getContext('2d');
   const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
   const c = '#' + color.toString(16).padStart(6, '0');
-  grad.addColorStop(0, c + '66');
-  grad.addColorStop(0.35, c + '2a');
+  grad.addColorStop(0, c + 'aa');
+  grad.addColorStop(0.35, c + '44');
   grad.addColorStop(1, c + '00');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 128, 128);
@@ -724,7 +709,7 @@ const infoEl = document.getElementById('info');
 document.getElementById('info-close').addEventListener('click', () => deselect());
 
 function setEmissive(node, on) {
-  node.frontMat.emissiveIntensity = on ? 0.4 : node.baseEmissive;
+  node.frontMat.emissiveIntensity = on ? 0.6 : node.baseEmissive;
 }
 
 function pick(ev) {
@@ -816,7 +801,7 @@ renderer.domElement.addEventListener('click', ev => {
 /* ---------- post-processing ---------- */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.45, 0.55, 0.88);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.6, 0.85);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -888,7 +873,7 @@ function animate() {
     const n = nodeById[id];
     const phase = id.length * 1.37;
     n.group.position.y = n.baseY + Math.sin(t * 0.9 + phase) * 0.09;
-    const s = (n.def.cat === 'net' ? 2.1 : 1.7) * (1 + Math.sin(t * 1.6 + phase) * 0.07);
+    const s = (n.def.cat === 'net' ? 3.2 : 2.6) * (1 + Math.sin(t * 1.6 + phase) * 0.07);
     n.halo.scale.setScalar(s);
   }
 
