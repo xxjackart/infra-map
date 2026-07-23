@@ -136,21 +136,6 @@ const LAYERS = {
   dns:        { label: 'DNS resolution',          color: 0x39d0d8 },
 };
 
-// native brand colors (simple-icons hex). Monogram nodes fall back to category color.
-const BRAND = {
-  n8n: 0xEA4B71, redmine: 0xB32024, grafana: 0xF46800, prometheus: 0xE6522C,
-  pihole: 0x96060C, homeassistant: 0x18BCF2, caddy: 0x1F88C0, postgresql: 0x4169E1,
-  tailscale: 0x242424, wireguard: 0x88171A, audiobookshelf: 0x82612C,
-  uptimekuma: 0x5CDD8B, rss: 0xFFA500, homepage: 0x009BD5,
-};
-// lift dark brands so they stay readable on the dark scene
-function visibleBrand(hex) {
-  const c = new THREE.Color(hex);
-  const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  if (lum < 0.12) c.lerp(new THREE.Color(0xffffff), 0.55);
-  return c;
-}
-
 // icon: simple-icons slug (jsdelivr) OR monogram letters
 const NODES = [
   // --- network overlay (center) ---
@@ -535,8 +520,6 @@ makePlatform(9.75, -4, 7.5, 8.5, 0x2fe6a8, 'SITE B · SATELLITE');
 /* ---------- nodes (extruded logo shapes, fixed in 3D) ---------- */
 const nodeById = {};
 const pickables = [];
-const RING_GEO = new THREE.RingGeometry(0.82, 1.02, 48);
-const DISC_GEO = new THREE.CircleGeometry(0.82, 48);
 
 function makeNode(def) {
   const cat = CATEGORIES[def.cat];
@@ -546,18 +529,14 @@ function makeNode(def) {
   // extruded logo geometry (shared cache), fixed orientation
   const { geos, flipY } = getIconGeos(def.icon);
   const holder = new THREE.Group();
-  // brand-native color for known slugs; category color for monograms
-  const shapeColor = BRAND[def.icon] !== undefined
-    ? visibleBrand(BRAND[def.icon])
-    : new THREE.Color(cat.color).multiplyScalar(1.15);
   const frontMat = new THREE.MeshStandardMaterial({
-    color: shapeColor,
-    emissive: shapeColor, emissiveIntensity: 0.12,
+    color: new THREE.Color(cat.color).multiplyScalar(1.15),
+    emissive: cat.color, emissiveIntensity: 0.12,
     roughness: 0.3, metalness: 0.55, transparent: true,
     side: THREE.DoubleSide, // required: holder scale.y=-1 flips winding (raycast culling)
   });
   const sideMat = new THREE.MeshStandardMaterial({
-    color: shapeColor.clone().multiplyScalar(0.45),
+    color: new THREE.Color(cat.color).multiplyScalar(0.45),
     roughness: 0.55, metalness: 0.35, transparent: true,
     side: THREE.DoubleSide,
   });
@@ -580,18 +559,6 @@ function makeNode(def) {
   pickables.push(hitProxy);
   group.add(hitProxy);
 
-  // category ring pedestal (fixed, XZ plane)
-  const ringMat = new THREE.MeshBasicMaterial({ color: cat.color, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
-  const ring = new THREE.Mesh(RING_GEO, ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = -1.05;
-  const discMat = new THREE.MeshBasicMaterial({ color: cat.color, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false });
-  const disc = new THREE.Mesh(DISC_GEO, discMat);
-  disc.rotation.x = -Math.PI / 2;
-  disc.position.y = -1.05;
-  if (isOverlay) { ring.scale.setScalar(1.22); disc.scale.setScalar(1.22); }
-  group.add(ring, disc);
-
   // glow halo — subtle
   const halo = makeGlowSprite(cat.color);
   halo.scale.setScalar(isOverlay ? 2.1 : 1.7);
@@ -613,15 +580,13 @@ function makeNode(def) {
   scene.add(group);
 
   nodeById[def.id] = {
-    def, group, holder, frontMat, sideMat, halo, ring, disc,
+    def, group, holder, frontMat, sideMat, halo,
     baseY: def.pos[1],
     baseEmissive: 0.12,
     dimMats: [
       { mat: frontMat, base: 1 },
       { mat: sideMat, base: 1 },
       { mat: halo.material, base: 1 },
-      { mat: ringMat, base: 0.85 },
-      { mat: discMat, base: 0.14 },
       { mat: l3d.mats[0], base: 1 },
       { mat: l3d.mats[1], base: 1 },
     ],
