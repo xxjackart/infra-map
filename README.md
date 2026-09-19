@@ -1,38 +1,37 @@
-# Private AI Infrastructure · architecture map
+# Private AI Infrastructure · system map
 
-Architecture-as-code map of a two-site self-hosted system, built with [LikeC4](https://likec4.dev/): one declarative model, many generated 2D views with auto-layout.
+One-screen map of a two-site self-hosted system: services, agents, data flows and the private network, on a single schematic canvas.
 
 **Live:** https://xxjackart.github.io/infra-map/
 
-![type](https://img.shields.io/badge/type-architecture--as--code-blue) ![tool](https://img.shields.io/badge/tool-LikeC4-informational) ![build](https://img.shields.io/badge/build-static%20site-brightgreen)
+![type](https://img.shields.io/badge/type-single--file%20poster-blue) ![deps](https://img.shields.io/badge/runtime%20deps-none-brightgreen)
 
-## What it shows
+## What you see
 
-- **Landscape**: two sites, an always-on agent node, clients, the private overlay, external systems
-- **Services**: what runs on each host, with real runtime dependencies
-- **Connectivity**: three independent layers (L3 routing, identity overlay, L2 service discovery)
-- **Data & RAG**: ingestion pipelines, knowledge base, vector store, shared agent memory
-- **Observability**: metrics scraping (including cross-site), dashboards, uptime failover pair
-- **DNS**: two independent resolver chains
-- **Security**: secrets flow, edge gateway, the single inbound chat channel
-- **Dynamic flows**: content to knowledge base, shared agent memory, monitoring and alerting, remote access
+- **Clients & agents** (left): people and devices, the workstation agent hub, the always-on agent worker
+- **Network fabric** (ribbon): mesh overlay, L3 site-to-site tunnel, mDNS discovery
+- **Site A · hub**: 18 components grouped into AI & knowledge, data, edge & security, observability, agents, DNS, home & media
+- **Site B · satellite**: primary automation, its own DNS chain and monitoring, so it survives a hub outage
+- **External systems** (bottom): AI APIs, content sources, cloud utilities, the E2E chat network, DNS roots
+- **12 key flows** instead of every relation: network, data, agent, monitoring, DNS and secrets
 
-## How it works
+Interactions: hover a component to trace the flows that touch it, click for a short description. On narrow screens the wires are hidden and the map becomes a clean stacked reference.
 
-The single source of truth is `model/infra.c4` (LikeC4 DSL: specification, elements, relationships, views). The static site is generated from it, no runtime dependencies:
+## How it is built
+
+- `index.html`: the published map. Single file, no build step, no runtime dependencies, hand-designed layout with automatically drawn connectors (positions are measured from the DOM, so the layout survives content changes).
+- `model/infra.c4`: a full [LikeC4](https://likec4.dev/) model of the same system for deep dives (every service, every relationship, dynamic flow views). Development only, not part of the published site.
 
 ```bash
 npm install
-npm run dev        # local viewer with live reload
-npm run validate   # model checks
-npm run build      # clean + build static site into the repo root
+npm run validate   # validate the LikeC4 model
+npm run dev        # open the full model in the LikeC4 viewer
 ```
 
-The build uses `--base /infra-map/` and hash-based routing, so the same artifact works on GitHub Pages and behind a reverse proxy without server-side rewrites.
+## Editing
 
-## Views versus a single diagram
-
-A graph of nearly forty elements on one canvas is unreadable. This map is split into focused views (each with a short description), and the model is written once: elements and relationships are never duplicated across views. Layout is computed (ELK), so nothing is hand-positioned.
+- The map content lives in the `NODES` and `LINKS` arrays at the top of the script in `index.html` (labels, roles, descriptions, clusters, flows). Connectors and the stats line recompute automatically.
+- Deeper detail lives in `model/infra.c4`.
 
 ## Security note
 

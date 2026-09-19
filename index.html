@@ -1,23 +1,557 @@
 <!DOCTYPE html>
-<html lang="en-US">
-
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="description" content="Architecture-as-code map of a two-site self-hosted system: one model, many generated views.">
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no" />
-  <link rel="icon" type="image/svg+xml" href="/infra-map/assets/favicon-CeB0sGK2.svg">
-  <title>Private AI Infrastructure · architecture map</title>
-  <script type="module" crossorigin src="/infra-map/assets/index-C_PyBAzR.js"></script>
-  <link rel="modulepreload" crossorigin href="/infra-map/assets/internal-DE3OytvW.js">
-  <link rel="modulepreload" crossorigin href="/infra-map/assets/hooks-7DZDvlOm.js">
-  <link rel="modulepreload" crossorigin href="/infra-map/assets/main-B2GogpK_.js">
-  <link rel="stylesheet" crossorigin href="/infra-map/assets/fonts-sNclyEVF.css">
-  <link rel="stylesheet" crossorigin href="/infra-map/assets/style-COFa3XKd.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='%235aa0ff'/><rect x='3' y='7' width='10' height='2' rx='1' fill='%2305070d'/></svg>">
+<title>Private AI Infrastructure · system map</title>
+<meta name="description" content="One-screen map of a two-site self-hosted system: services, agents, data flows and the private network.">
+<style>
+  :root {
+    --bg: #04060c;
+    --panel: rgba(12, 17, 29, 0.72);
+    --panel-2: rgba(16, 22, 36, 0.6);
+    --border: rgba(120, 150, 220, 0.16);
+    --border-2: rgba(120, 150, 220, 0.28);
+    --text: #dbe5f8;
+    --dim: #8291b3;
+    --faint: #5b6885;
+    --accent: #5aa0ff;
+
+    --c-client: #e8eefc;
+    --c-service: #5b9dff;
+    --c-store: #a07cff;
+    --c-edge: #ff6b81;
+    --c-network: #2fe6a8;
+    --c-agent: #ffd166;
+    --c-ext: #93a0bb;
+    --c-mon: #ffb454;
+    --c-dns: #3ed3db;
+
+    --w-net: #2fe6a8;
+    --w-data: #5b9dff;
+    --w-agent: #ffd166;
+    --w-mon: #ffb454;
+    --w-dns: #3ed3db;
+    --w-sec: #ff6b81;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1100px 620px at 18% -10%, rgba(70, 110, 255, 0.16), transparent 60%),
+      radial-gradient(900px 560px at 88% 8%, rgba(47, 230, 168, 0.10), transparent 60%),
+      radial-gradient(1000px 700px at 50% 118%, rgba(160, 124, 255, 0.12), transparent 62%),
+      linear-gradient(rgba(120, 150, 220, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120, 150, 220, 0.045) 1px, transparent 1px);
+    background-size: auto, auto, auto, 44px 44px, 44px 44px;
+    -webkit-mask-image: radial-gradient(120% 100% at 50% 40%, #000 55%, transparent 100%);
+    mask-image: radial-gradient(120% 100% at 50% 40%, #000 55%, transparent 100%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1720px; margin: 0 auto; padding: 20px 26px 16px; }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
+  .brand h1 { font-size: 19px; letter-spacing: 0.26em; font-weight: 600; text-transform: uppercase; }
+  .brand h1 span { color: var(--accent); }
+  .brand p { margin-top: 6px; color: var(--dim); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stat {
+    border: 1px solid var(--border); border-radius: 10px; padding: 7px 12px;
+    background: var(--panel); backdrop-filter: blur(8px); font-size: 10.5px; letter-spacing: 0.1em;
+    color: var(--dim); text-transform: uppercase;
+  }
+  .stat b { color: var(--text); font-weight: 600; }
+
+  /* ---------- stage ---------- */
+  .stage { position: relative; display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 26px; align-items: start; }
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
+  .col, .panel { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 14px; }
+
+  .panel {
+    border: 1px solid var(--border); border-radius: 16px; padding: 14px 15px 15px;
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    backdrop-filter: blur(10px);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+  .panel > header { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+  .panel > header h2 { font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 600; }
+  .panel > header .dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 12px currentColor; }
+  .panel .sub { margin-left: auto; font-size: 10px; color: var(--faint); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .zone-siteA { border-color: rgba(91, 157, 255, 0.30); }
+  .zone-siteA > header .dot { color: var(--c-service); background: var(--c-service); }
+  .zone-siteB { border-color: rgba(47, 230, 168, 0.26); }
+  .zone-siteB > header .dot { color: var(--c-network); background: var(--c-network); }
+
+  .sites { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 18px; align-items: start; }
+  #siteA-clusters { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; align-items: start; }
+  #siteB-clusters { display: grid; grid-template-columns: 1fr; gap: 2px; align-items: start; }
+  .zone-ext { border-style: dashed; }
+  .zone-ext > header .dot { color: var(--c-ext); background: var(--c-ext); }
+
+  /* network ribbon */
+  .ribbon {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    border: 1px dashed rgba(47, 230, 168, 0.34); border-radius: 14px; padding: 10px 16px;
+    background: linear-gradient(90deg, rgba(47, 230, 168, 0.10), rgba(47, 230, 168, 0.03) 55%, rgba(47, 230, 168, 0.10));
+  }
+  .ribbon .tag { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--c-network); }
+  .ribbon .items { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* clusters + chips */
+  .cluster { margin-bottom: 8px; }
+  .cluster:last-child { margin-bottom: 0; }
+  .cluster h4 { font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .chip {
+    position: relative; border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(20, 27, 44, 0.72); padding: 6px 10px 5px; cursor: pointer;
+    transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.2s ease;
+    opacity: 0; transform: translateY(6px);
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .chip:hover { transform: translateY(-2px); border-color: var(--border-2); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45); z-index: 5; }
+  .chip .nm { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+  .chip .nm i { width: 7px; height: 7px; border-radius: 2px; background: var(--k, var(--c-service)); box-shadow: 0 0 10px var(--k, var(--c-service)); flex: none; }
+  .chip .rl { margin-top: 2px; font-size: 9.5px; color: var(--dim); letter-spacing: 0.03em; }
+  .chip[data-cat="store"]   { --k: var(--c-store); }
+  .chip[data-cat="edge"]    { --k: var(--c-edge); }
+  .chip[data-cat="network"] { --k: var(--c-network); }
+  .chip[data-cat="agent"]   { --k: var(--c-agent); }
+  .chip[data-cat="client"]  { --k: var(--c-client); }
+  .chip[data-cat="mon"]     { --k: var(--c-mon); }
+  .chip[data-cat="dns"]     { --k: var(--c-dns); }
+  .chip[data-cat="ext"]     { --k: var(--c-ext); }
+  .chip[data-cat="service"] { --k: var(--c-service); }
+  .chip.sm { padding: 6px 10px 5px; }
+  .chip.sm .nm { font-size: 11px; }
+  .chip.sm .rl { display: none; }
+
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .stack .chip { width: 100%; }
+
+  /* wires */
+  .wire { fill: none; stroke-linecap: round; opacity: 0.5; transition: opacity 0.2s ease, stroke-width 0.2s ease; filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.8)); }
+  .wire.flow { stroke-dasharray: 7 7; animation: dash 1.6s linear infinite; }
+  .wire.flow.slow { stroke-dasharray: 4 8; animation-duration: 2.6s; }
+  @keyframes dash { to { stroke-dashoffset: -28; } }
+  .wire-label {
+    font-size: 10px; letter-spacing: 0.08em; fill: #c6d2ea; text-anchor: middle;
+    paint-order: stroke; stroke: rgba(4, 6, 12, 0.9); stroke-width: 3px; opacity: 0.85;
+  }
+  .stage.focused .chip { opacity: 0.34; }
+  .stage.focused .chip.on { opacity: 1; }
+  .stage.focused .wire { opacity: 0.08; }
+  .stage.focused .wire.on { opacity: 1; stroke-width: 2; }
+  .stage.focused .wire-label { opacity: 0.1; }
+  .wire-label.on { opacity: 1; }
+
+  /* popover */
+  #info {
+    position: fixed; left: 26px; bottom: 26px; width: min(340px, calc(100vw - 52px)); z-index: 30;
+    border: 1px solid var(--border-2); border-radius: 14px; padding: 14px 16px;
+    background: rgba(9, 13, 23, 0.94); backdrop-filter: blur(12px);
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+    opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  #info.open { opacity: 1; transform: none; pointer-events: auto; }
+  #info h3 { font-size: 13px; letter-spacing: 0.06em; color: var(--accent); }
+  #info .meta { margin: 4px 0 8px; font-size: 10px; color: var(--faint); letter-spacing: 0.14em; text-transform: uppercase; }
+  #info p { font-size: 11.5px; color: var(--text); line-height: 1.55; }
+  #info .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+  #info .tags span { font-size: 10px; color: var(--dim); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px; }
+  #info button { position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--faint); font-size: 14px; cursor: pointer; }
+  #info button:hover { color: var(--text); }
+
+  /* footer */
+  footer { margin-top: 22px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; color: var(--faint); font-size: 10.5px; letter-spacing: 0.06em; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 26px; height: 0; border-top: 2px solid currentColor; margin-right: 7px; vertical-align: middle; }
+  .legend .dash i { border-top-style: dashed; }
+  .legend.kinds { margin-left: 8px; }
+  .legend.kinds i { width: 9px; height: 9px; border: none; background: currentColor; border-radius: 3px; }
+  .legend .net { color: var(--w-net); } .legend .data { color: var(--w-data); }
+  .legend .agent { color: var(--w-agent); } .legend .mon { color: var(--w-mon); }
+  .legend .dns { color: var(--w-dns); } .legend .sec { color: var(--w-sec); }
+  footer .note { margin-left: auto; }
+
+  @media (max-width: 1020px) {
+    .stage { grid-template-columns: 1fr; }
+    svg.wires { display: none; }
+    .col { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: start; }
+    .sites { grid-template-columns: 1fr; }
+    #siteA-clusters, #siteB-clusters { grid-template-columns: 1fr 1fr; }
+    .ribbon { align-self: start; }
+  }
+  @media (max-width: 700px) {
+    .wrap { padding: 18px 14px 14px; }
+    .brand h1 { font-size: 15px; letter-spacing: 0.18em; }
+    #info { left: 14px; right: 14px; bottom: 14px; width: auto; }
+  }
+</style>
 </head>
-
 <body>
-  <div id="likec4-root"></div>
-</body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Private AI <span>Infrastructure</span></h1>
+      <p>two sites · local-first · agents &amp; data platform</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
 
+  <div class="stage" id="stage">
+    <svg class="wires" id="wires" aria-hidden="true"></svg>
+
+    <!-- left: clients -->
+    <div class="col" id="col-clients"></div>
+
+    <!-- center: network ribbon + sites -->
+    <div class="col" style="gap:16px">
+      <div class="ribbon" id="ribbon" data-anchor="ribbon"></div>
+      <div class="sites">
+        <section class="panel zone-siteA" data-anchor="siteA" id="panelA">
+          <header><span class="dot"></span><h2>Site A · hub</h2><span class="sub">primary host</span></header>
+          <div id="siteA-clusters"></div>
+        </section>
+        <section class="panel zone-siteB" data-anchor="siteB" id="panelB">
+          <header><span class="dot"></span><h2>Site B · satellite</h2><span class="sub">survives hub outage</span></header>
+          <div id="siteB-clusters"></div>
+        </section>
+      </div>
+      <section class="panel zone-ext" data-anchor="ext" id="panelExt">
+        <header><span class="dot"></span><h2>External systems</h2><span class="sub">internet reach</span></header>
+        <div class="chips" id="ext-chips"></div>
+      </section>
+    </div>
+
+    <!-- external strip lives inside the main column (see below) -->
+  </div>
+
+  <footer>
+    <div class="legend">
+      <span class="net"><i></i>network</span>
+      <span class="data"><i></i>data flow</span>
+      <span class="agent"><i></i>agent flow</span>
+      <span class="mon dash"><i></i>monitoring</span>
+      <span class="dns dash"><i></i>DNS</span>
+      <span class="sec"><i></i>secrets</span>
+    </div>
+    <span class="note">hover a component to trace its flows · click for details · layout is schematic, not physical</span>
+    <div class="legend kinds">
+      <span style="color:var(--c-client)"><i></i>clients</span>
+      <span style="color:var(--c-service)"><i></i>services</span>
+      <span style="color:var(--c-store)"><i></i>data</span>
+      <span style="color:var(--c-edge)"><i></i>edge</span>
+      <span style="color:var(--c-agent)"><i></i>agents</span>
+      <span style="color:var(--c-mon)"><i></i>monitoring</span>
+      <span style="color:var(--c-dns)"><i></i>DNS</span>
+      <span style="color:var(--c-ext)"><i></i>external</span>
+    </div>
+  </footer>
+</div>
+
+<div id="info" role="dialog" aria-live="polite">
+  <button id="info-close" aria-label="close">✕</button>
+  <h3 id="info-name"></h3>
+  <div class="meta" id="info-meta"></div>
+  <p id="info-desc"></p>
+  <div class="tags" id="info-tags"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA · public-safe: tool names and patterns only.
+   Edit NODES / LINKS to evolve the map. Layout is automatic.
+   ============================================================ */
+const NODES = [
+  // clients & agents
+  { id: 'people', label: 'People & devices', role: 'phone · tablet · TV', cat: 'client', col: 'clients',
+    desc: 'Everyday devices. Reach every service over the private overlay; nothing is exposed to the public internet.' },
+  { id: 'workstation', label: 'Workstation · agent hub', role: 'agent CLI + MCP hub', cat: 'client', col: 'clients',
+    desc: 'Daily driver: the agent CLI as the hub of the MCP ecosystem, offline speech-to-text and local models.',
+    tags: ['agent CLI', 'MCP', 'offline STT'] },
+  { id: 'worker', label: 'Agent worker', role: 'always-on node', cat: 'agent', col: 'clients',
+    desc: 'Headless always-on node: delegated agent tasks, phone access, shared-memory producer and an encrypted file inbox.' },
+
+  // network ribbon
+  { id: 'overlay', label: 'Mesh overlay', role: 'identity VPN', cat: 'network', col: 'ribbon',
+    desc: 'Mesh VPN (WireGuard-based). Identity instead of addresses: NAT traversal is automatic and traffic is end-to-end encrypted.' },
+  { id: 'l3', label: 'L3 site-to-site', role: 'router tunnel', cat: 'network', col: 'ribbon',
+    desc: 'Encrypted tunnel between the two LANs at router level. Full bidirectional routing between the sites.' },
+  { id: 'mdns', label: 'mDNS relay', role: 'service discovery', cat: 'network', col: 'ribbon',
+    desc: 'Bridges Bonjour discovery across sites: multicast is forwarded as unicast over the overlay.' },
+
+  // site A
+  { id: 'openwebui', label: 'OpenWebUI', role: 'RAG front-end', cat: 'service', cluster: 'AI & knowledge', zone: 'A',
+    desc: 'Knowledge hub and RAG front-end: ~30 thematic collections, chat interface and an OpenAI-compatible API for agents.' },
+  { id: 'n8n', label: 'n8n', role: 'workflow orchestrator', cat: 'service', cluster: 'AI & knowledge', zone: 'A',
+    desc: 'The ETL backbone: feeds, videos, voice, articles and mail are ingested, scored, deduplicated and pushed to the knowledge base.' },
+  { id: 'redmine', label: 'Redmine', role: 'tracker + wiki', cat: 'service', cluster: 'AI & knowledge', zone: 'A',
+    desc: 'Single source of truth for tasks, documentation and time tracking.' },
+  { id: 'postgres', label: 'PostgreSQL', role: 'relational data', cat: 'store', cluster: 'Data', zone: 'A',
+    desc: 'Application data and analytics: tracker, pipelines and expense dashboards.' },
+  { id: 'qdrant', label: 'Qdrant', role: 'vector store', cat: 'store', cluster: 'Data', zone: 'A',
+    desc: 'Embeddings for semantic search, plus a lock/dedup store that keeps ingestion pipelines idempotent.' },
+  { id: 'caddy', label: 'Caddy', role: 'edge gateway', cat: 'edge', cluster: 'Edge & security', zone: 'A',
+    desc: 'Reverse proxy and MCP gateway with automatic certificates: the single controlled entry point for agents and automation APIs.' },
+  { id: 'infisical', label: 'Infisical', role: 'secrets', cat: 'edge', cluster: 'Edge & security', zone: 'A',
+    desc: 'Secrets management. Keys are injected into local tools at launch and rotation happens in exactly one place.' },
+  { id: 'searxng', label: 'SearXNG', role: 'metasearch', cat: 'service', cluster: 'Edge & security', zone: 'A',
+    desc: 'Self-hosted metasearch for agents: no tracking, no API quota, zero marginal cost.' },
+  { id: 'grafana', label: 'Grafana', role: 'dashboards', cat: 'mon', cluster: 'Observability', zone: 'A',
+    desc: 'Dashboards for system, containers, DNS, databases, workflows and knowledge-base stats.' },
+  { id: 'prometheus', label: 'Prometheus', role: 'metrics', cat: 'mon', cluster: 'Observability', zone: 'A',
+    desc: 'Metrics every 60s, including the satellite and the agent node over the tunnel. Alert rules on CPU, memory, disk and uptime.' },
+  { id: 'kumaA', label: 'Uptime Kuma', role: 'failover pair · A', cat: 'mon', cluster: 'Observability', zone: 'A',
+    desc: 'Uptime monitor, instance 1 of an independent failover pair. Probes services on both sites.' },
+  { id: 'dsh', label: 'Agent harness', role: 'long-running agent', cat: 'agent', cluster: 'Agents', zone: 'A',
+    desc: 'Long-running agent on the hub: daily digests to the tracker, shared-memory producer, MCP clients for search and tasks.' },
+  { id: 'bridge', label: 'Chat bridge', role: 'E2E → agent', cat: 'agent', cluster: 'Agents', zone: 'A',
+    desc: 'Bridges an end-to-end encrypted chat channel to the hub agent. Loopback-only API, hardened container.' },
+  { id: 'piholeA', label: 'Pi-hole', role: 'DNS · A', cat: 'dns', cluster: 'DNS', zone: 'A', small: true,
+    desc: 'Network-wide ad and telemetry blocking at DNS level, covering devices that cannot run blockers.' },
+  { id: 'unboundA', label: 'Unbound', role: 'resolver · A', cat: 'dns', cluster: 'DNS', zone: 'A', small: true,
+    desc: 'Recursive DNSSEC-validating resolver. Queries authoritative nameservers directly.' },
+  { id: 'haA', label: 'Home Assistant', role: 'automation · A', cat: 'service', cluster: 'Home & media', zone: 'A', small: true,
+    desc: 'Automation instance at the hub: entities, automations and dashboards.' },
+  { id: 'homepage', label: 'Homepage', role: 'start page', cat: 'mon', cluster: 'Home & media', zone: 'A', small: true,
+    desc: 'Start page aggregating all services with live widgets.' },
+  { id: 'abs', label: 'Audiobookshelf', role: 'media server', cat: 'service', cluster: 'Home & media', zone: 'A', small: true,
+    desc: 'Self-hosted audiobook and podcast server with mobile apps.' },
+
+  // site B
+  { id: 'haB', label: 'Home Assistant', role: 'primary automation', cat: 'service', cluster: 'Automation', zone: 'B',
+    desc: 'Primary automation instance: ~350 entities, Zigbee/Thread border router and voice-assistant integrations.' },
+  { id: 'haMcp', label: 'Automation MCP', role: 'agent endpoint', cat: 'edge', cluster: 'Automation', zone: 'B',
+    desc: 'MCP endpoint that exposes the automation instance to agents, reachable only through the gateway.' },
+  { id: 'piholeB', label: 'Pi-hole', role: 'DNS · B', cat: 'dns', cluster: 'DNS', zone: 'B',
+    desc: 'Site B ad-blocking DNS. Fully independent chain: it keeps resolving if the hub goes down.' },
+  { id: 'unboundB', label: 'Unbound', role: 'resolver · B', cat: 'dns', cluster: 'DNS', zone: 'B',
+    desc: 'Recursive DNSSEC-validating resolver for site B.' },
+  { id: 'kumaB', label: 'Uptime Kuma', role: 'failover pair · B', cat: 'mon', cluster: 'Monitoring', zone: 'B',
+    desc: 'Uptime monitor, instance 2 of the pair. The watchdog must not die with what it watches.' },
+
+  // external
+  { id: 'aiApis', label: 'AI APIs', role: 'models & speech', cat: 'ext', col: 'ext',
+    desc: 'External language and speech APIs for scoring, drafts, synthesis and transcription. Non-sensitive content only.' },
+  { id: 'sources', label: 'Content sources', role: 'RSS · video · mail', cat: 'ext', col: 'ext',
+    desc: 'Feeds, playlists, e-mail, voice memos, saved articles and NAS folders: raw material for the pipelines.' },
+  { id: 'cloud', label: 'Cloud utilities', role: 'backup · alerts', cat: 'ext', col: 'ext',
+    desc: 'Off-site destination for workflow backups and the delivery channel for pipeline and uptime reports.' },
+  { id: 'chatnet', label: 'E2E chat network', role: 'no identifiers', cat: 'ext', col: 'ext',
+    desc: 'Decentralised end-to-end encrypted messaging. No phone number, no global identity: the only inbound channel for the hub agent.' },
+  { id: 'rootDns', label: 'DNS roots', role: 'recursive chain', cat: 'ext', col: 'ext',
+    desc: 'Root and authoritative nameservers, reached directly by the local resolvers.' },
+];
+
+// kind: net | data | agent | mon | dns | sec
+// Schematic backbone: endpoints are chips, panels (siteA/siteB) or the ribbon.
+// Intra-panel detail is carried by the cluster grouping and the info popovers.
+const LINKS = [
+  { a: 'people', b: 'overlay', kind: 'net' },
+  { a: 'workstation', b: 'overlay', kind: 'net' },
+  { a: 'worker', b: 'overlay', kind: 'net' },
+  { a: 'overlay', b: 'siteA', kind: 'net', label: 'exposes services', show: true },
+  { a: 'siteA', b: 'siteB', kind: 'net', label: 'L3 routing', show: true },
+  { a: 'siteA', b: 'siteB', kind: 'net', label: 'mDNS discovery', dashed: true },
+  { a: 'sources', b: 'siteA', kind: 'data', label: 'ingest', show: true },
+  { a: 'siteA', b: 'aiApis', kind: 'data', label: 'AI scoring', show: true },
+  { a: 'siteA', b: 'cloud', kind: 'data', label: 'backups', show: true },
+  { a: 'chatnet', b: 'siteA', kind: 'agent', label: 'E2E → agent', show: true },
+  { a: 'siteA', b: 'rootDns', kind: 'dns', label: 'recursion', show: true, dashed: true },
+  { a: 'siteB', b: 'siteA', kind: 'mon', label: 'scrape over L3', show: true, dashed: true },
+];
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+const stage = document.getElementById('stage');
+const svg = document.getElementById('wires');
+const CAT = { service: 'Core service', store: 'Data store', edge: 'Edge & security', network: 'Network', agent: 'AI agent', client: 'Client', mon: 'Monitoring', dns: 'DNS', ext: 'External system' };
+const KIND = { net: 'network', data: 'data flow', agent: 'agent flow', mon: 'monitoring', dns: 'DNS', sec: 'secrets' };
+
+function chipEl(n, i) {
+  const el = document.createElement('div');
+  el.className = 'chip' + (n.col === 'ribbon' || n.small ? ' sm' : '');
+  el.dataset.id = n.id;
+  el.dataset.cat = n.cat;
+  el.innerHTML = `<div class="nm"><i></i>${n.label}</div>` + (n.role ? `<div class="rl">${n.role}</div>` : '');
+  el.style.animationDelay = (60 + i * 22) + 'ms';
+  el.addEventListener('mouseenter', () => focus(n.id));
+  el.addEventListener('mouseleave', () => focus(null));
+  el.addEventListener('click', () => showInfo(n));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showInfo(n); } });
+  el.addEventListener('animationend', () => redraw());
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  return el;
+}
+let idx = 0;
+for (const n of NODES) if (n.col === 'clients') document.getElementById('col-clients').appendChild(chipEl(n, idx++));
+
+const ribbon = document.getElementById('ribbon');
+ribbon.insertAdjacentHTML('beforeend', '<div class="items" id="ribbon-items"></div><span class="tag">private network fabric · both sites</span>');
+for (const n of NODES) if (n.col === 'ribbon') document.getElementById('ribbon-items').appendChild(chipEl(n, idx++));
+for (const n of NODES) if (n.col === 'ext') document.getElementById('ext-chips').appendChild(chipEl(n, idx++));
+
+const clusters = { A: {}, B: {} };
+for (const n of NODES) if (n.zone) (clusters[n.zone][n.cluster] ||= []).push(n);
+for (const [zone, groups] of Object.entries(clusters)) {
+  const host = document.getElementById(zone === 'A' ? 'siteA-clusters' : 'siteB-clusters');
+  for (const [title, items] of Object.entries(groups)) {
+    const g = document.createElement('div');
+    g.className = 'cluster';
+    g.innerHTML = `<h4>${title}</h4>`;
+    const box = document.createElement('div');
+    box.className = 'chips';
+    items.forEach(n => box.appendChild(chipEl(n, idx++)));
+    g.appendChild(box);
+    host.appendChild(g);
+  }
+}
+
+/* stats */
+{
+  const services = NODES.filter(n => ['service', 'store', 'edge', 'mon', 'dns', 'agent'].includes(n.cat) && n.id !== 'worker').length;
+  document.getElementById('stats').innerHTML =
+    `<span class="stat"><b>${NODES.length}</b> components</span>` +
+    `<span class="stat"><b>${services}</b> self-hosted services</span>` +
+    `<span class="stat"><b>${LINKS.length}</b> key flows</span>` +
+    `<span class="stat">2 sites · <b>${new Set(LINKS.map(l => l.kind)).size}</b> signal types</span>`;
+}
+
+/* ============================================================
+   WIRES · anchors computed from layout, drawn as beziers
+   ============================================================ */
+const WCOLOR = { net: 'var(--w-net)', data: 'var(--w-data)', agent: 'var(--w-agent)', mon: 'var(--w-mon)', dns: 'var(--w-dns)', sec: 'var(--w-sec)' };
+const anchorOf = id => document.querySelector(`[data-id="${id}"]`) || document.querySelector(`[data-anchor="${id}"]`);
+
+function draw() {
+  svg.innerHTML = '';
+  const base = stage.getBoundingClientRect();
+  const wires = [], labels = [];
+  const pairSeen = {};
+
+  for (const l of LINKS) {
+    const A = anchorOf(l.a), B = anchorOf(l.b);
+    if (!A || !B) continue;
+    const ar = A.getBoundingClientRect(), br = B.getBoundingClientRect();
+    const ac = { x: ar.left + ar.width / 2 - base.left, y: ar.top + ar.height / 2 - base.top };
+    const bc = { x: br.left + br.width / 2 - base.left, y: br.top + br.height / 2 - base.top };
+    const dx = bc.x - ac.x, dy = bc.y - ac.y;
+    // pick anchor sides: overlap-aware (stacked boxes connect vertically, side-by-side horizontally)
+    const overlapX = Math.min(ar.right, br.right) - Math.max(ar.left, br.left);
+    const overlapY = Math.min(ar.bottom, br.bottom) - Math.max(ar.top, br.top);
+    const horizontal = overlapY > 40 && overlapX <= 60 ? true : overlapX > 60 ? false : Math.abs(dx) >= Math.abs(dy);
+    const p = 6;
+    const a = horizontal
+      ? { x: ac.x + Math.sign(dx) * (ar.width / 2 + p), y: ac.y }
+      : { x: ac.x, y: ac.y + Math.sign(dy) * (ar.height / 2 + p) };
+    const b = horizontal
+      ? { x: bc.x - Math.sign(dx) * (br.width / 2 + p), y: bc.y }
+      : { x: bc.x, y: bc.y - Math.sign(dy) * (br.height / 2 + p) };
+    const adx = b.x - a.x, ady = b.y - a.y;
+    const pairKey = [l.a, l.b].sort().join('|');
+    const pairIdx = (pairSeen[pairKey] = (pairSeen[pairKey] || 0) + 1) - 1;
+    const bow = pairIdx * 16;
+    const c1 = horizontal ? { x: a.x + adx * 0.45, y: a.y + bow } : { x: a.x + bow, y: a.y + ady * 0.45 };
+    const c2 = horizontal ? { x: b.x - adx * 0.45, y: b.y + bow } : { x: b.x + bow, y: b.y - ady * 0.45 };
+    const d = `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`;
+    wires.push({ d, l });
+    const mid = horizontal
+      ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 + bow }
+      : { x: (a.x + b.x) / 2 + bow, y: (a.y + b.y) / 2 };
+    if (l.show && l.label) labels.push({ x: mid.x, y: mid.y - 4, l });
+  }
+
+  // nudge labels apart so they never stack
+  labels.sort((p, q) => p.x - q.x);
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(labels[i].x - labels[j].x) < 96 && Math.abs(labels[i].y - labels[j].y) < 13) {
+        labels[i].y = Math.max(8, labels[j].y - 13);
+        j = -1;
+      }
+    }
+  }
+
+  const NS = 'http://www.w3.org/2000/svg';
+  for (const { d, l } of wires) {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'wire' + (l.dashed ? ' flow slow' : (l.kind === 'data' || l.kind === 'agent') ? ' flow' : ''));
+    path.setAttribute('stroke', WCOLOR[l.kind]);
+    path.setAttribute('stroke-width', l.kind === 'net' ? 1.6 : 1.3);
+    path.dataset.a = l.a; path.dataset.b = l.b;
+    svg.appendChild(path);
+  }
+  for (const { x, y, l } of labels) {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('class', 'wire-label');
+    t.dataset.a = l.a; t.dataset.b = l.b;
+    t.textContent = l.label;
+    svg.appendChild(t);
+  }
+}
+
+/* focus on hover */
+const zoneOf = id => (byId[id] && byId[id].zone) ? 'site' + byId[id].zone : id;
+const relatedWire = (l, id) => {
+  const z = zoneOf(id);
+  return l.a === id || l.b === id || l.a === z || l.b === z;
+};
+function focus(id) {
+  stage.classList.toggle('focused', !!id);
+  const onChips = new Set();
+  const onWires = id ? LINKS.filter(l => relatedWire(l, id)) : [];
+  if (id) {
+    onChips.add(id);
+    for (const l of onWires) {
+      if (byId[l.a]) onChips.add(l.a);
+      if (byId[l.b]) onChips.add(l.b);
+      if (byId[l.a] === undefined && l.a !== 'ribbon') { /* panel */ }
+    }
+  }
+  stage.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', onChips.has(c.dataset.id)));
+  svg.querySelectorAll('.wire, .wire-label').forEach(w => {
+    const on = !id || onWires.some(l => l.a === w.dataset.a && l.b === w.dataset.b);
+    w.classList.toggle('on', on);
+  });
+}
+
+/* info popover */
+const info = document.getElementById('info');
+function showInfo(n) {
+  document.getElementById('info-name').textContent = n.label;
+  document.getElementById('info-meta').textContent = CAT[n.cat] + (n.zone ? ` · site ${n.zone}` : '') + (n.cluster ? ` · ${n.cluster}` : '');
+  document.getElementById('info-desc').textContent = n.desc;
+  document.getElementById('info-tags').innerHTML = (n.tags || []).map(t => `<span>${t}</span>`).join('');
+  info.classList.add('open');
+}
+document.getElementById('info-close').addEventListener('click', () => info.classList.remove('open'));
+window.addEventListener('keydown', e => { if (e.key === 'Escape') info.classList.remove('open'); });
+
+/* redraw on resize + after fonts settle */
+let raf = null;
+const redraw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); };
+window.addEventListener('resize', redraw);
+new ResizeObserver(redraw).observe(stage);
+draw();
+setTimeout(draw, 350);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+</script>
+</body>
 </html>
