@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%235aa0ff'/></svg>">
-<title>Private AI Infrastructure — Interactive 3D Map</title>
+<title>Private AI Infrastructure · Interactive 3D Map</title>
 <style>
   :root {
     --bg: #05070d;
@@ -25,11 +25,25 @@
   #title { top: 18px; left: 22px; }
   #title h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
   #title p { font-size: 11px; color: var(--dim); margin-top: 4px; letter-spacing: 0.05em; }
+  #title p b { color: var(--accent); font-weight: 600; }
+
+  #searchbox { top: 64px; left: 22px; }
+  #search {
+    width: 236px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px;
+    color: var(--text); font: inherit; font-size: 11px; padding: 8px 11px; outline: none;
+    backdrop-filter: blur(8px); letter-spacing: 0.05em; transition: border-color 0.2s;
+  }
+  #search:focus { border-color: rgba(90, 160, 255, 0.6); }
+  #search::placeholder { color: var(--dim); }
 
   #legend { top: 18px; right: 22px; background: var(--panel); border: 1px solid var(--border);
-            border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(8px); min-width: 168px; }
+            border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(8px); min-width: 176px; }
   #legend h2 { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; margin-bottom: 8px; }
-  .lg-item { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 2.5px 0; color: var(--text); }
+  .lg-item { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 3px 5px; margin: 0 -5px;
+             color: var(--text); cursor: pointer; border-radius: 6px; transition: background 0.15s; }
+  .lg-item:hover { background: rgba(90, 160, 255, 0.10); }
+  .lg-item.active { background: rgba(90, 160, 255, 0.16); }
+  .lg-item .lg-count { margin-left: auto; color: var(--dim); font-size: 10px; }
   .lg-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; box-shadow: 0 0 6px currentColor; }
 
   #layers { bottom: 20px; left: 22px; background: var(--panel); border: 1px solid var(--border);
@@ -37,7 +51,16 @@
   #layers h2 { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; margin-bottom: 8px; }
   #layers label { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 3px 0; cursor: pointer; user-select: none; }
   #layers input { accent-color: var(--accent); }
-  #layers .hint { margin-top: 8px; font-size: 10px; color: var(--dim); }
+  #layers .hint { margin-top: 8px; font-size: 10px; color: var(--dim); line-height: 1.6; }
+  #layers kbd { background: rgba(90, 160, 255, 0.12); border: 1px solid var(--border); border-radius: 4px;
+                padding: 0 4px; font: inherit; font-size: 9px; color: var(--text); }
+  #tour {
+    margin-top: 9px; width: 100%; background: rgba(90, 160, 255, 0.10); color: var(--accent);
+    border: 1px solid var(--border); border-radius: 7px; font: inherit; font-size: 10.5px;
+    letter-spacing: 0.1em; padding: 6px 8px; cursor: pointer; text-transform: uppercase; transition: background 0.15s;
+  }
+  #tour:hover { background: rgba(90, 160, 255, 0.2); }
+  #tour.on { background: rgba(90, 160, 255, 0.3); color: #fff; }
 
   #info { bottom: 20px; right: 22px; width: 300px; background: var(--panel); border: 1px solid var(--border);
           border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(8px); display: none; }
@@ -49,12 +72,30 @@
   #info .tag { font-size: 10px; color: var(--dim); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; }
   #info .close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: var(--dim); font-size: 14px; background: none; border: none; }
   #info .close:hover { color: var(--text); }
+  #copy-link { margin-top: 10px; background: none; border: 1px solid var(--border); border-radius: 6px;
+               color: var(--dim); font: inherit; font-size: 10px; letter-spacing: 0.08em; padding: 4px 8px; cursor: pointer; }
+  #copy-link:hover { color: var(--text); border-color: rgba(90, 160, 255, 0.5); }
+
+  #tip { position: fixed; z-index: 20; pointer-events: none; display: none; max-width: 280px;
+         background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+         padding: 6px 10px; font-size: 11px; color: var(--text); backdrop-filter: blur(8px); }
+  #tip .t2 { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; }
 
   #help { bottom: 20px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--dim); letter-spacing: 0.08em; }
+  #help kbd { color: var(--dim); }
 
   #loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
             background: var(--bg); z-index: 100; transition: opacity 0.6s; font-size: 12px; color: var(--dim); letter-spacing: 0.2em; }
   #loader.done { opacity: 0; pointer-events: none; }
+
+  @media (max-width: 760px) {
+    #legend { display: none; }
+    #search { width: 170px; }
+    #info { left: 12px; right: 12px; width: auto; bottom: 12px; }
+    #help { display: none; }
+    #layers { left: 12px; bottom: 12px; padding: 9px 11px; }
+  }
+  @media (hover: none) { #tip { display: none !important; } }
 </style>
 </head>
 <body>
@@ -63,15 +104,18 @@
 
 <div class="hud" id="title">
   <h1>Private AI Infrastructure</h1>
-  <p>two-site self-hosted system · interactive map</p>
+  <p id="subtitle">two-site self-hosted system · interactive map</p>
 </div>
+
+<div class="hud" id="searchbox"><input id="search" type="text" placeholder="search nodes…  ( / )" autocomplete="off" spellcheck="false"></div>
 
 <div class="hud" id="legend"><h2>Node type</h2></div>
 
 <div class="hud" id="layers">
   <h2>Connection layers</h2>
   <div id="layer-toggles"></div>
-  <div class="hint">click node = focus · click space = release<br>drag = orbit · wheel = zoom · right-drag = pan</div>
+  <button id="tour">▶ auto-tour</button>
+  <div class="hint">click node = focus · <kbd>/</kbd> search · <kbd>t</kbd> tour<br><kbd>r</kbd> reset view · <kbd>1-4</kbd> layers · <kbd>esc</kbd> release</div>
 </div>
 
 <div class="hud" id="info">
@@ -80,7 +124,10 @@
   <div class="cat" id="info-cat"></div>
   <p id="info-desc"></p>
   <div class="tags" id="info-tags"></div>
+  <button id="copy-link">⧉ copy view link</button>
 </div>
+
+<div class="hud" id="tip"></div>
 
 <div class="hud" id="help">PRIVATE AI INFRASTRUCTURE · 3D TOPOLOGY</div>
 
@@ -108,10 +155,11 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Text } from 'troika-three-text';
 
 /* ============================================================
-   DATA MODEL — public-safe (tool names + patterns only)
+   DATA MODEL · public-safe (tool names + patterns only)
    Edit NODES / LINKS to evolve the map.
    ============================================================ */
 const CATEGORIES = {
@@ -121,6 +169,7 @@ const CATEGORIES = {
   mon:    { color: 0xffb454, label: 'Monitoring' },
   iot:    { color: 0x58d68d, label: 'Automation / IoT' },
   sec:    { color: 0xff6b81, label: 'Security' },
+  agent:  { color: 0xffd166, label: 'AI agents' },
   client: { color: 0xe8eefc, label: 'Clients' },
   ext:    { color: 0x66708a, label: 'External' },
   net:    { color: 0x2fe6a8, label: 'Network overlay' },
@@ -133,28 +182,31 @@ const LAYERS = {
   dns:        { label: 'DNS resolution',          color: 0x39d0d8 },
 };
 
-// pos: [x, y, z] — Site A platform left, Site B right, clients far-left, external top-right
+// pos: [x, y, z]: Site A platform left, Site B right, clients far-left, external top-right
 const NODES = [
   // --- network overlay (center) ---
   { id: 'tailnet',  cat: 'net', label: 'Tailscale mesh', pos: [0, 6.4, 0],
     desc: 'Mesh VPN (WireGuard-based). Identity instead of addresses: every node gets an overlay identity, NAT traversal automatic, E2E encryption between nodes.',
     tags: ['WireGuard', 'Magic DNS', 'E2E'] },
   { id: 'wgtunnel', cat: 'net', label: 'L3 site-to-site', pos: [0, 3.4, 3.2],
-    desc: 'Router-level WireGuard tunnel between the two LANs. Full bidirectional IP routing between sites — independent of the node-to-node overlay.',
+    desc: 'Router-level WireGuard tunnel between the two LANs. Full bidirectional IP routing between sites, independent of the node-to-node overlay.',
     tags: ['site-to-site', 'routing'] },
+  { id: 'mdns',     cat: 'net', label: 'mDNS relay', pos: [-4.4, 4.5, -3.0],
+    desc: 'Userspace mDNS relay bridging the two LANs: multicast discovery (Bonjour) is forwarded as unicast over the overlay, so devices discover services across sites.',
+    tags: ['L2 discovery', 'UDP relay'] },
 
-  // --- Site A (hub) — grid 4 columns × 4 rows ---
+  // --- Site A (hub), grid 4 columns × 5 rows ---
   { id: 'openwebui', cat: 'core', label: 'OpenWebUI', site: 'A', pos: [-17, 1.0, 3.3],
     desc: 'Knowledge base hub + RAG front-end. OpenAI-compatible API, ~30 thematic knowledge collections, chat interface for local agents.',
     tags: ['RAG', 'knowledge base'] },
   { id: 'n8n', cat: 'core', label: 'n8n', site: 'A', pos: [-13.8, 1.0, 3.3],
-    desc: 'Workflow orchestrator — the ETL backbone. RSS/YouTube/voice/receipt ingestion, AI scoring, dedup, KB upload, backups, mail processing.',
-    tags: ['ETL', 'automation', '32 workflows'] },
+    desc: 'Workflow orchestrator: the ETL backbone. RSS/YouTube/voice/article ingestion, AI scoring, dedup, KB upload, digests, backups, mail processing.',
+    tags: ['ETL', 'automation', '23 workflows'] },
   { id: 'redmine', cat: 'core', label: 'Redmine', site: 'A', pos: [-10.6, 1.0, 3.3],
-    desc: 'Task & project tracker — the single source of truth for work items, wiki documentation and time tracking.',
+    desc: 'Task & project tracker: the single source of truth for work items, wiki documentation and time tracking.',
     tags: ['source of truth', 'wiki'] },
   { id: 'postgres', cat: 'data', label: 'PostgreSQL', site: 'A', pos: [-7.4, 1.0, 3.3],
-    desc: 'Relational database for application data and analytics (expenses). Backs Redmine and Grafana dashboards.',
+    desc: 'Relational database for application data and analytics (expenses). Backs the tracker and the dashboards.',
     tags: ['SQL', 'analytics'] },
   { id: 'qdrant', cat: 'data', label: 'Qdrant', site: 'A', pos: [-17, 1.0, 0.1],
     desc: 'Vector database. Embeddings for semantic search (RAG) + distributed lock/dedup store for ingestion pipelines (Qdrant Lock Pattern).',
@@ -163,16 +215,16 @@ const NODES = [
     desc: 'Dashboards: system, containers, DNS, databases, workflow metrics, knowledge-base stats.',
     tags: ['dashboards'] },
   { id: 'prometheus', cat: 'mon', label: 'Prometheus', site: 'A', pos: [-10.6, 1.0, 0.1],
-    desc: 'Metrics TSDB. Scrapes node/container/DNS/app exporters every 60s, 30-day retention, alert rules.',
+    desc: 'Metrics TSDB. Scrapes node/container/DNS/app exporters every 60s, including the satellite site and the agent server over the L3 tunnel. 30-day retention, alert rules.',
     tags: ['metrics', 'alerts'] },
   { id: 'kumaA', cat: 'mon', label: 'Uptime Kuma', site: 'A', pos: [-7.4, 1.0, 0.1],
-    desc: 'Uptime monitor — instance 1 of a failover pair. Watches all tailnet services every 60s.',
+    desc: 'Uptime monitor (instance 1 of a failover pair). Watches all tailnet services every 60s.',
     tags: ['uptime', 'failover pair'] },
   { id: 'piholeA', cat: 'dns', label: 'Pi-hole', site: 'A', pos: [-17, 1.0, -3.1],
-    desc: 'Network-wide ad/telemetry blocking at DNS level — covers devices that cannot run blockers (TV, speakers, IoT).',
+    desc: 'Network-wide ad/telemetry blocking at DNS level, covers devices that cannot run blockers (TV, speakers, IoT).',
     tags: ['ad-blocking', 'DNS'] },
   { id: 'unboundA', cat: 'dns', label: 'Unbound', site: 'A', pos: [-13.8, 1.0, -3.1],
-    desc: 'Recursive, validating (DNSSEC), caching resolver. Queries authoritative nameservers directly — no third-party DNS sees the full picture.',
+    desc: 'Recursive, validating (DNSSEC), caching resolver. Queries authoritative nameservers directly; no third-party DNS sees the full picture.',
     tags: ['recursive', 'DNSSEC'] },
   { id: 'haA', cat: 'iot', label: 'Home Assistant', site: 'A', pos: [-10.6, 1.0, -3.1],
     desc: 'Home automation instance (site A). Entities, automations, dashboards; paired with the site B instance.',
@@ -181,46 +233,64 @@ const NODES = [
     desc: 'Start-page dashboard aggregating all services with live widgets.',
     tags: ['dashboard'] },
   { id: 'infisical', cat: 'sec', label: 'Infisical', site: 'A', pos: [-17, 1.0, -6.3],
-    desc: 'Secrets management — single source of truth for API keys and tokens. Injected into local tools at launch; rotation happens in exactly one place.',
+    desc: 'Secrets management: single source of truth for API keys and tokens. Injected into local tools at launch; rotation happens in exactly one place.',
     tags: ['secrets', 'injection'] },
   { id: 'caddy', cat: 'sec', label: 'Caddy', site: 'A', pos: [-13.8, 1.0, -6.3],
-    desc: 'Reverse proxy / gateway with automatic certificates. Edge routing for selected services.',
+    desc: 'Reverse proxy / gateway with automatic certificates. Edge routing for the automation API and the remote MCP endpoints; also serves this map on the private tailnet.',
     tags: ['reverse proxy', 'TLS'] },
   { id: 'abs', cat: 'core', label: 'Audiobookshelf', site: 'A', pos: [-10.6, 1.0, -6.3],
     desc: 'Self-hosted audiobook & podcast server with mobile apps.',
     tags: ['media'] },
+  { id: 'searxng', cat: 'core', label: 'SearXNG', site: 'A', pos: [-7.4, 1.0, -6.3],
+    desc: 'Self-hosted metasearch aggregating public engines: no tracking, no API quota. The $0 web-search layer for agents (bulk queries + fallback).',
+    tags: ['metasearch', 'no tracking'] },
+  { id: 'dsh', cat: 'agent', label: 'Agent harness', site: 'A', pos: [-17, 1.0, -9.5],
+    desc: 'Long-running agent on the hub: daily digests to the tracker, shared-memory producer, MCP clients (tracker API, web search).',
+    tags: ['agent', 'MCP', 'memory'] },
+  { id: 'bridge', cat: 'agent', label: 'Chat bridge', site: 'A', pos: [-13.8, 1.0, -9.5],
+    desc: 'Bridges the end-to-end encrypted chat channel to the hub agent. Loopback-only API, hardened container (read-only FS, dropped capabilities).',
+    tags: ['E2E chat', 'loopback'] },
 
   // --- Site B (satellite) ---
   { id: 'piholeB', cat: 'dns', label: 'Pi-hole', site: 'B', pos: [8.5, 1.0, -2.5],
-    desc: 'Site B ad-blocking DNS. Same role, fully independent — each site keeps resolving if the other goes down.',
+    desc: 'Site B ad-blocking DNS. Same role, fully independent; each site keeps resolving if the other goes down.',
     tags: ['ad-blocking', 'DNS'] },
   { id: 'unboundB', cat: 'dns', label: 'Unbound', site: 'B', pos: [8.5, 1.0, -5.5],
     desc: 'Site B recursive resolver (DNSSEC). Mirrors the site A resolver chain.',
     tags: ['recursive', 'DNSSEC'] },
   { id: 'haB', cat: 'iot', label: 'Home Assistant', site: 'B', pos: [11.5, 1.0, -2.5],
-    desc: 'Primary home automation instance — ~350 entities, Zigbee/Thread border router, voice-assistant integrations.',
+    desc: 'Primary home automation instance: ~350 entities, Zigbee/Thread border router, voice-assistant integrations.',
     tags: ['automation', 'Zigbee', 'Thread'] },
   { id: 'kumaB', cat: 'mon', label: 'Uptime Kuma', site: 'B', pos: [11.5, 1.0, -5.5],
-    desc: 'Uptime monitor — instance 2 of the failover pair. The watchdog must not die with what it watches.',
+    desc: 'Uptime monitor (instance 2 of the failover pair). The watchdog must not die with what it watches.',
     tags: ['uptime', 'failover pair'] },
 
-  // --- clients ---
-  { id: 'workstation', cat: 'client', label: 'Workstation', pos: [-20, 5.5, 6],
-    desc: 'Daily driver. Runs the agent CLI (Open Code) as the hub of the MCP ecosystem, plus offline speech-to-text (Superwhisper) and local LLMs.',
-    tags: ['Open Code', 'MCP hub', 'STT offline'] },
-  { id: 'mobile', cat: 'client', label: 'Mobile devices', pos: [-20, 3.0, 9],
-    desc: 'Phone / tablet / TV — reach every service over the mesh overlay. No ports exposed to the public internet.',
+  // --- clients / agents ---
+  { id: 'workstation', cat: 'client', label: 'Workstation', pos: [-21.5, 5.5, 6],
+    desc: 'Daily driver. Runs the agent CLI as the hub of the MCP ecosystem, plus offline speech-to-text and local LLMs.',
+    tags: ['agent CLI', 'MCP hub', 'STT offline'] },
+  { id: 'mobile', cat: 'client', label: 'Mobile devices', pos: [-21.5, 3.0, 9],
+    desc: 'Phone / tablet / TV: reach every service over the mesh overlay. No ports exposed to the public internet.',
     tags: ['remote access'] },
+  { id: 'worker', cat: 'agent', label: 'Agent worker', pos: [-22, 6.8, 3.2],
+    desc: 'Dedicated headless mini-server running a remote agent endpoint: delegated tasks, phone access, shared-memory producer, encrypted file inbox.',
+    tags: ['delegation', 'always-on'] },
 
   // --- external ---
-  { id: 'llm', cat: 'ext', label: 'LLM providers', pos: [16, 7.5, 6],
-    desc: 'External language-model APIs (DeepSeek family). Used for scoring and synthesis of non-sensitive content; private data stays in-network.',
-    tags: ['DeepSeek', 'API'] },
-  { id: 'sources', cat: 'ext', label: 'Content sources', pos: [20, 5.0, 1],
-    desc: 'RSS feeds, YouTube playlists, e-mail — raw material for the ingestion pipelines.',
-    tags: ['RSS', 'YouTube', 'mail'] },
+  { id: 'llm', cat: 'ext', label: 'AI APIs', pos: [15.5, 7.3, 5.5],
+    desc: 'External language & speech APIs: primary DeepSeek family (scoring, drafts, synthesis), Gemini (classification), Deepgram (speech-to-text). Non-sensitive content only; private data stays in-network.',
+    tags: ['DeepSeek', 'Gemini', 'Deepgram'] },
+  { id: 'sources', cat: 'ext', label: 'Content sources', pos: [20, 4.8, 0.5],
+    desc: 'RSS feeds, YouTube playlists, e-mail, voice memos, saved articles, NAS folders: raw material for the ingestion pipelines.',
+    tags: ['RSS', 'YouTube', 'mail', 'voice'] },
+  { id: 'cloud', cat: 'ext', label: 'Cloud utilities', pos: [23.5, 6.6, 1.5],
+    desc: 'Off-site destination for workflow backups and delivery channel for pipeline reports. Nothing user-generated lives here beyond what the pipelines explicitly export.',
+    tags: ['offsite backup', 'alerts'] },
+  { id: 'chatnet', cat: 'ext', label: 'E2E chat network', pos: [18.5, 8.8, 8.2],
+    desc: 'Decentralised end-to-end encrypted messaging network. No phone number, no global identity; the only inbound channel for the hub agent.',
+    tags: ['E2E', 'no identifiers'] },
   { id: 'rootdns', cat: 'ext', label: 'Root / auth NS', pos: [4, 7.5, -9],
-    desc: 'Root and authoritative nameservers — the end of the recursive resolver chain.',
+    desc: 'Root and authoritative nameservers: the end of the recursive resolver chain.',
     tags: ['DNS'] },
 ];
 
@@ -228,17 +298,20 @@ const LINKS = [
   // network layer
   { a: 'workstation', b: 'tailnet', layer: 'network' },
   { a: 'mobile', b: 'tailnet', layer: 'network' },
+  { a: 'worker', b: 'tailnet', layer: 'network' },
   { a: 'tailnet', b: 'openwebui', layer: 'network' },
   { a: 'tailnet', b: 'n8n', layer: 'network' },
   { a: 'tailnet', b: 'redmine', layer: 'network' },
   { a: 'tailnet', b: 'grafana', layer: 'network' },
+  { a: 'tailnet', b: 'searxng', layer: 'network' },
   { a: 'tailnet', b: 'haB', layer: 'network' },
-  { a: 'wgtunnel', b: 'tailnet', layer: 'network', dashed: true },
   { a: 'tailnet', b: 'haA', layer: 'network' },
   { a: 'tailnet', b: 'abs', layer: 'network' },
+  { a: 'wgtunnel', b: 'tailnet', layer: 'network', dashed: true },
+  { a: 'mdns', b: 'tailnet', layer: 'network', dashed: true, label: 'transport' },
   { a: 'caddy', b: 'n8n', layer: 'network', label: 'proxy' },
   { a: 'caddy', b: 'haB', layer: 'network', label: 'gateway' },
-  { a: 'homepage', b: 'grafana', layer: 'monitoring', label: 'widgets' },
+  { a: 'caddy', b: 'infisical', layer: 'network', label: 'MCP API' },
   // data flow
   { a: 'sources', b: 'n8n', layer: 'data', label: 'ingest' },
   { a: 'workstation', b: 'n8n', layer: 'data', label: 'voice' },
@@ -248,20 +321,36 @@ const LINKS = [
   { a: 'openwebui', b: 'qdrant', layer: 'data', label: 'embeddings' },
   { a: 'n8n', b: 'qdrant', layer: 'data', label: 'lock/dedup' },
   { a: 'n8n', b: 'postgres', layer: 'data' },
+  { a: 'n8n', b: 'cloud', layer: 'data', label: 'backup/reports' },
   { a: 'redmine', b: 'postgres', layer: 'data' },
+  { a: 'workstation', b: 'openwebui', layer: 'data', label: 'RAG API' },
   { a: 'workstation', b: 'redmine', layer: 'data', label: 'MCP' },
   { a: 'workstation', b: 'grafana', layer: 'data', label: 'MCP' },
   { a: 'workstation', b: 'infisical', layer: 'data', label: 'secrets' },
   { a: 'workstation', b: 'haB', layer: 'data', label: 'MCP' },
+  { a: 'workstation', b: 'searxng', layer: 'data', label: 'web search' },
+  { a: 'workstation', b: 'worker', layer: 'data', label: 'delegation' },
+  { a: 'worker', b: 'openwebui', layer: 'data', label: 'memory sync' },
+  { a: 'worker', b: 'searxng', layer: 'data', label: 'search' },
+  { a: 'mobile', b: 'worker', layer: 'data', label: 'file inbox' },
+  { a: 'chatnet', b: 'bridge', layer: 'data', label: 'E2E' },
+  { a: 'bridge', b: 'dsh', layer: 'data', label: 'agent' },
+  { a: 'dsh', b: 'redmine', layer: 'data', label: 'MCP' },
+  { a: 'dsh', b: 'openwebui', layer: 'data', label: 'memory' },
+  { a: 'dsh', b: 'searxng', layer: 'data', label: 'search' },
   // monitoring
   { a: 'prometheus', b: 'grafana', layer: 'monitoring' },
   { a: 'prometheus', b: 'n8n', layer: 'monitoring', dashed: true },
   { a: 'prometheus', b: 'qdrant', layer: 'monitoring', dashed: true },
   { a: 'prometheus', b: 'piholeA', layer: 'monitoring', dashed: true },
   { a: 'prometheus', b: 'unboundA', layer: 'monitoring', dashed: true },
+  { a: 'prometheus', b: 'piholeB', layer: 'monitoring', dashed: true, label: 'scrape · L3' },
+  { a: 'prometheus', b: 'unboundB', layer: 'monitoring', dashed: true, label: 'scrape · L3' },
+  { a: 'prometheus', b: 'worker', layer: 'monitoring', dashed: true, label: 'scrape' },
   { a: 'kumaA', b: 'openwebui', layer: 'monitoring', dashed: true },
   { a: 'kumaB', b: 'haB', layer: 'monitoring', dashed: true },
   { a: 'kumaA', b: 'kumaB', layer: 'monitoring', label: 'failover' },
+  { a: 'homepage', b: 'grafana', layer: 'monitoring', label: 'widgets' },
   // dns layer
   { a: 'mobile', b: 'piholeA', layer: 'dns' },
   { a: 'workstation', b: 'piholeA', layer: 'dns' },
@@ -275,7 +364,7 @@ const LINKS = [
    SCENE SETUP
    ============================================================ */
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -283,12 +372,12 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05070d);
-scene.fog = new THREE.FogExp2(0x05070d, 0.012);
+scene.fog = new THREE.FogExp2(0x05070d, 0.011);
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
-const HOME_CAM = new THREE.Vector3(1, 21, 33);
-const HOME_TGT = new THREE.Vector3(-3, 0.8, -0.5);
-camera.position.set(0, 55, 85); // cinematic intro start
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 600);
+const HOME_CAM = new THREE.Vector3(0, 19, 35);
+const HOME_TGT = new THREE.Vector3(-4, 0.8, -1);
+camera.position.set(0, 60, 92); // cinematic intro start
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -297,7 +386,7 @@ controls.autoRotate = false;
 controls.autoRotateSpeed = 0.55;
 controls.maxPolarAngle = Math.PI * 0.55;
 controls.minDistance = 8;
-controls.maxDistance = 90;
+controls.maxDistance = 110;
 controls.target.set(0, 10, 0);
 controls.enabled = false;
 
@@ -313,10 +402,17 @@ function flyTo(camPos, tgtPos, dur, done) {
   controls.enabled = false;
 }
 function cancelFly() {
-  if (camAnim) { camAnim = null; controls.enabled = true; }
+  if (camAnim) {
+    const done = camAnim.done;
+    camAnim = null;
+    controls.enabled = true;
+    if (done) done();
+  }
 }
 renderer.domElement.addEventListener('pointerdown', cancelFly);
 const easeInOutCubic = k => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const easeOutBack = k => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+const clamp01 = k => Math.min(Math.max(k, 0), 1);
 
 // pause auto-rotate while interacting, resume after idle
 let idleTimer = null;
@@ -335,6 +431,32 @@ const rimLight = new THREE.DirectionalLight(0x4f8cff, 0.5);
 rimLight.position.set(-14, 10, -16);
 scene.add(rimLight);
 
+/* ---------- sky dome ---------- */
+{
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(280, 32, 24),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false,
+      uniforms: {
+        uTop: { value: new THREE.Color(0x01030a) },
+        uMid: { value: new THREE.Color(0x081226) },
+        uHorizon: { value: new THREE.Color(0x040910) },
+      },
+      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        varying vec3 vP; uniform vec3 uTop, uMid, uHorizon;
+        void main(){
+          float h = normalize(vP).y;
+          vec3 c = mix(uHorizon, uMid, smoothstep(-0.08, 0.30, h));
+          c = mix(c, uTop, smoothstep(0.30, 0.95, h));
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    })
+  );
+  sky.renderOrder = -10;
+  scene.add(sky);
+}
+
 // starfield
 {
   const n = 1400, pos = new Float32Array(n * 3);
@@ -349,9 +471,10 @@ scene.add(rimLight);
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x3a4a6a, size: 0.35, sizeAttenuation: true })));
 }
 
-// reflective floor: mirror + dark veil + grid
+// reflective floor: mirror + dark veil + animated scan grid
+let reflectorRef = null;
 {
-  const reflector = new Reflector(new THREE.PlaneGeometry(120, 120), {
+  const reflector = new Reflector(new THREE.PlaneGeometry(130, 130), {
     clipBias: 0.003,
     textureWidth: Math.floor(window.innerWidth * 0.5),
     textureHeight: Math.floor(window.innerHeight * 0.5),
@@ -360,22 +483,47 @@ scene.add(rimLight);
   reflector.rotation.x = -Math.PI / 2;
   reflector.position.y = -0.08;
   scene.add(reflector);
+  reflectorRef = reflector;
 
   const veil = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 120),
+    new THREE.PlaneGeometry(130, 130),
     new THREE.MeshBasicMaterial({ color: 0x05070d, transparent: true, opacity: 0.84, depthWrite: false })
   );
   veil.rotation.x = -Math.PI / 2;
   veil.position.y = -0.05;
   scene.add(veil);
 }
-const grid = new THREE.GridHelper(90, 45, 0x1c2a4a, 0x101a30);
-grid.position.y = -0.02;
-scene.add(grid);
+const scanMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: {
+    uTime: { value: 0 },
+    uColorA: { value: new THREE.Color(0x2f5cff) },
+    uColorB: { value: new THREE.Color(0x27d3c0) },
+  },
+  vertexShader: 'varying vec2 vXZ; void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vXZ = wp.xz; gl_Position = projectionMatrix * viewMatrix * wp; }',
+  fragmentShader: `
+    uniform float uTime; uniform vec3 uColorA, uColorB; varying vec2 vXZ;
+    void main(){
+      vec2 cell = vXZ / 1.6;
+      vec2 g = abs(fract(cell - 0.5) - 0.5) / fwidth(cell);
+      float grid = 1.0 - min(min(g.x, g.y), 1.0);
+      float d = length(vXZ);
+      float fall = 1.0 - smoothstep(5.0, 60.0, d);
+      float ring = smoothstep(0.90, 1.0, sin(d * 0.55 - uTime * 1.15)) * 0.55;
+      float edge = smoothstep(47.0, 50.0, d) * smoothstep(60.0, 53.0, d);
+      vec3 col = mix(uColorA, uColorB, 0.5 + 0.5 * sin(d * 0.28 - uTime * 0.6));
+      float a = (grid * 0.15 + ring * 0.10 + edge * 0.22) * fall;
+      gl_FragColor = vec4(col, a);
+    }`,
+});
+const scanPlane = new THREE.Mesh(new THREE.PlaneGeometry(130, 130), scanMat);
+scanPlane.rotation.x = -Math.PI / 2;
+scanPlane.position.y = -0.02;
+scene.add(scanPlane);
 
 /* ---------- SDF text labels (troika) ---------- */
 const LABEL_FONT = 'https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.2.5/files/ibm-plex-mono-latin-500-normal.woff';
-function makeLabel(text, { size = 0.36, color = '#cfe0ff', anchorY = 'bottom' } = {}) {
+function makeLabel(text, { size = 0.36, color = '#cfe0ff', anchorY = 'bottom', opacity = 1 } = {}) {
   const t = new Text();
   t.text = text;
   t.font = LABEL_FONT;
@@ -386,11 +534,13 @@ function makeLabel(text, { size = 0.36, color = '#cfe0ff', anchorY = 'bottom' } 
   t.outlineWidth = 0.022;
   t.outlineColor = new THREE.Color(0x05070d);
   t.outlineOpacity = 0.9;
+  t.fillOpacity = opacity;
   t.sync();
   return t;
 }
 
-/* ---------- site platforms ---------- */
+/* ---------- site platforms + corner accents ---------- */
+const platformEdges = [];
 function makePlatform(cx, cz, w, d, color, label) {
   const geo = new THREE.BoxGeometry(w, 0.35, d);
   const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.16, roughness: 0.4, metalness: 0.6 });
@@ -403,16 +553,48 @@ function makePlatform(cx, cz, w, d, color, label) {
   );
   edges.position.copy(m.position);
   scene.add(edges);
-  const sprite = makeLabel(label, { size: 1.05, color: '#aebadb' });
-  sprite.position.set(cx, 0.65, cz + d / 2 + 1.1);
+  platformEdges.push(edges);
+
+  // corner accents
+  const hw = w / 2, hd = d / 2, L = 1.1, y = 0.25;
+  const pts = [];
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const [sx, sz] of corners) {
+    const x0 = cx + sx * hw, z0 = cz + sz * hd;
+    pts.push(x0, y, z0, x0 - sx * L, y, z0);
+    pts.push(x0, y, z0, x0, y, z0 - sz * L);
+  }
+  const accGeo = new THREE.BufferGeometry();
+  accGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+  const accents = new THREE.LineSegments(accGeo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+  scene.add(accents);
+
+  const sprite = makeLabel(label, { size: 0.8, color: '#8fa3cc' });
+  sprite.position.set(cx, 0.5, cz + hd + 1.7);
   scene.add(sprite);
 }
-makePlatform(-12.2, -1.5, 13.5, 13.5, 0x4f8cff, 'SITE A · NAS HUB');
+makePlatform(-12.2, -2.9, 13.5, 17, 0x4f8cff, 'SITE A · CORE');
 makePlatform(9.75, -4, 7.5, 8.5, 0x2fe6a8, 'SITE B · SATELLITE');
+
+/* ---------- contact shadow texture ---------- */
+function shadowTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.55, 'rgba(0,0,0,0.22)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+const SHADOW_TEX = shadowTexture();
 
 /* ---------- nodes ---------- */
 const nodeById = {};
 const pickables = [];
+const pedestalRings = [];
 
 function injectFresnel(mat, colorHex, strength) {
   mat.onBeforeCompile = (shader) => {
@@ -436,7 +618,7 @@ function makeNode(def) {
   const isOverlay = def.cat === 'net';
   const geo = isOverlay
     ? new THREE.IcosahedronGeometry(0.65, 1)
-    : new THREE.BoxGeometry(1.35, 1.35, 1.35);
+    : new RoundedBoxGeometry(1.35, 1.35, 1.35, 4, 0.16);
 
   const mat = new THREE.MeshStandardMaterial({
     color: cat.color, roughness: 0.32, metalness: 0.55,
@@ -451,10 +633,9 @@ function makeNode(def) {
   let edge = null;
   if (!isOverlay) {
     edge = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geo),
-      new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.9 })
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1.58, 1.58, 1.58)),
+      new THREE.LineBasicMaterial({ color: cat.color, transparent: true, opacity: 0.28 })
     );
-    edge.scale.setScalar(1.002);
     group.add(edge);
   }
 
@@ -464,11 +645,31 @@ function makeNode(def) {
   group.add(halo);
 
   const label = makeLabel(def.label, { color: def.cat === 'client' ? '#ffffff' : '#cfe0ff' });
-  label.position.y = isOverlay ? 1.7 : 1.45;
+  label.position.y = isOverlay ? 1.7 : 1.42 + Math.max(0, 3.2 - def.pos[2]) * 0.055;
   group.add(label);
 
   group.position.fromArray(def.pos);
   scene.add(group);
+
+  // contact shadow + pedestal ring on platforms
+  if (def.site) {
+    const shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6, 2.6),
+      new THREE.MeshBasicMaterial({ map: SHADOW_TEX, transparent: true, depthWrite: false })
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(def.pos[0], 0.235, def.pos[2]);
+    scene.add(shadow);
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.3, 1.5, 56),
+      new THREE.MeshBasicMaterial({ color: cat.color, transparent: true, opacity: 0.38, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(def.pos[0], 0.26, def.pos[2]);
+    scene.add(ring);
+    pedestalRings.push({ mesh: ring, speed: 0.12 + Math.random() * 0.2, phase: Math.random() * Math.PI * 2 });
+  }
 
   mesh.userData.nodeDef = def;
   pickables.push(mesh);
@@ -476,6 +677,7 @@ function makeNode(def) {
     def, group, mesh, edge, halo, label,
     baseY: def.pos[1],
     baseEmissive: isOverlay ? 0.35 : 0.18,
+    baseEdgeOpacity: 0.28,
   };
   return nodeById[def.id];
 }
@@ -496,7 +698,8 @@ function makeGlowSprite(color) {
   return new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
 }
 
-NODES.forEach(makeNode);
+NODES.forEach(def => makeNode(def));
+Object.values(nodeById).forEach((n, i) => { n.group.userData.introDelay = 1.0 + i * 0.055; });
 
 /* ---------- links: base line + shader pulse tube ---------- */
 const linkGroups = {};
@@ -504,7 +707,7 @@ Object.keys(LAYERS).forEach(k => { linkGroups[k] = new THREE.Group(); scene.add(
 
 const tubeMats = [];
 const tubePickables = [];
-const linkStates = []; // { def, line, tubeMat, label }
+const linkStates = []; // { def, curve, line, tubeMat, baseLineOpacity }
 
 const tubeVert = `
   varying vec2 vUv;
@@ -562,42 +765,124 @@ function makeLink(def) {
   tubeMats.push(tubeMat);
   tubePickables.push(tube);
 
-  let label = null;
-  if (def.label) {
-    label = makeLabel(def.label, { size: 0.26, color: '#8fa3cc' });
-    label.position.copy(curve.getPoint(0.5));
-    label.position.y += 0.55;
-    linkGroups[def.layer].add(label);
-  }
-
-  linkStates.push({ def, line, tubeMat, label, baseLineOpacity: line.material.opacity });
+  linkStates.push({ def, curve, line, tubeMat, baseLineOpacity: line.material.opacity });
 }
 
 LINKS.forEach(makeLink);
+
+/* ---------- data packets (1 draw call per layer) ---------- */
+const packetSystems = {};
+{
+  const speeds = { network: 0.045, data: 0.075, monitoring: 0.05, dns: 0.038 };
+  const sizes  = { network: 0.36, data: 0.46, monitoring: 0.34, dns: 0.34 };
+  for (const layer of Object.keys(LAYERS)) {
+    const links = linkStates.filter(ls => ls.def.layer === layer);
+    if (!links.length) continue;
+    const counts = links.map(() => layer === 'data' ? 3 : 2);
+    const total = counts.reduce((a, b) => a + b, 0);
+    const aCtrl = new Float32Array(total * 3);
+    const aEnd  = new Float32Array(total * 3);
+    const aOffset = new Float32Array(total);
+    const aDim = new Float32Array(total).fill(1);
+    const pos = new Float32Array(total * 3);
+    let k = 0;
+    links.forEach((ls, li) => {
+      const c = ls.curve, n = counts[li];
+      ls.packetRange = [k, n];
+      for (let j = 0; j < n; j++) {
+        pos.set([c.v0.x, c.v0.y, c.v0.z], k * 3);
+        aCtrl.set([c.v1.x, c.v1.y, c.v1.z], k * 3);
+        aEnd.set([c.v2.x, c.v2.y, c.v2.z], k * 3);
+        aOffset[k] = (j + 0.5) / n;
+        k++;
+      }
+    });
+    const g = new THREE.BufferGeometry();
+    const attrDim = new THREE.BufferAttribute(aDim, 1);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('aCtrl', new THREE.BufferAttribute(aCtrl, 3));
+    g.setAttribute('aEnd', new THREE.BufferAttribute(aEnd, 3));
+    g.setAttribute('aOffset', new THREE.BufferAttribute(aOffset, 1));
+    g.setAttribute('aDim', attrDim);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Color(LAYERS[layer].color) },
+        uSpeed: { value: speeds[layer] },
+        uSize: { value: sizes[layer] },
+        uAlpha: { value: 0 },
+      },
+      vertexShader: `
+        attribute vec3 aCtrl, aEnd; attribute float aOffset, aDim;
+        uniform float uTime, uSpeed, uSize;
+        varying float vA;
+        void main(){
+          float t = fract(uTime * uSpeed + aOffset);
+          vec3 p = (1.0 - t) * (1.0 - t) * position + 2.0 * (1.0 - t) * t * aCtrl + t * t * aEnd;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_PointSize = clamp(uSize * (320.0 / -mv.z), 1.0, 22.0);
+          vA = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.93, 1.0, t)) * aDim;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColor; uniform float uAlpha;
+        varying float vA;
+        void main(){
+          float d = length(gl_PointCoord - 0.5);
+          float a = (1.0 - smoothstep(0.06, 0.5, d)) * vA * uAlpha;
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(uColor, a);
+        }`,
+    });
+    const points = new THREE.Points(g, mat);
+    points.frustumCulled = false;
+    linkGroups[layer].add(points);
+    packetSystems[layer] = { points, mat, attrDim, aDim };
+  }
+}
 
 // adjacency for focus dimming
 const adjacency = {};
 NODES.forEach(n => { adjacency[n.id] = new Set(); });
 LINKS.forEach(l => { if (adjacency[l.a]) adjacency[l.a].add(l.b); if (adjacency[l.b]) adjacency[l.b].add(l.a); });
 
-/* ---------- legend + layer toggles ---------- */
+/* ---------- legend (clickable) + layer toggles ---------- */
 const legend = document.getElementById('legend');
-Object.values(CATEGORIES).forEach(c => {
+const legendItems = {};
+Object.entries(CATEGORIES).forEach(([key, c]) => {
+  const count = NODES.filter(n => n.cat === key).length;
   const el = document.createElement('div');
   el.className = 'lg-item';
-  el.innerHTML = `<span class="lg-dot" style="background:#${c.color.toString(16).padStart(6,'0')};color:#${c.color.toString(16).padStart(6,'0')}"></span>${c.label}`;
+  el.innerHTML = `<span class="lg-dot" style="background:#${c.color.toString(16).padStart(6,'0')};color:#${c.color.toString(16).padStart(6,'0')}"></span>${c.label}<span class="lg-count">${count}</span>`;
+  el.addEventListener('click', () => {
+    const ids = new Set(NODES.filter(n => n.cat === key).map(n => n.id));
+    const active = focusSource === 'legend:' + key;
+    setFocusSource(active ? null : 'legend:' + key);
+    applyFocus(active ? null : ids);
+    Object.values(legendItems).forEach(x => x.classList.remove('active'));
+    if (!active) el.classList.add('active');
+  });
   legend.appendChild(el);
+  legendItems[key] = el;
 });
 
 const toggles = document.getElementById('layer-toggles');
+const layerInputs = {};
 Object.entries(LAYERS).forEach(([key, cfg]) => {
   const label = document.createElement('label');
   label.innerHTML = `<input type="checkbox" checked data-layer="${key}"> ${cfg.label}`;
-  label.querySelector('input').addEventListener('change', e => {
+  const input = label.querySelector('input');
+  input.addEventListener('change', e => {
     linkGroups[key].visible = e.target.checked;
   });
   toggles.appendChild(label);
+  layerInputs[key] = input;
 });
+
+/* ---------- stats line ---------- */
+document.getElementById('subtitle').innerHTML =
+  `two-site self-hosted system · <b>${NODES.length}</b> services · <b>${LINKS.length}</b> links`;
 
 /* ---------- picking / focus / info panel ---------- */
 const raycaster = new THREE.Raycaster();
@@ -605,8 +890,11 @@ const mouse = new THREE.Vector2();
 let hoveredNode = null;
 let hoveredTube = null;
 let selected = null;
+let focusSource = null;
+let lastFocusSet = null;
 
 const infoEl = document.getElementById('info');
+const tipEl = document.getElementById('tip');
 document.getElementById('info-close').addEventListener('click', () => deselect());
 
 function setEmissive(node, on) {
@@ -624,41 +912,64 @@ function pick(ev) {
   return { node: null, tube: null };
 }
 
-function applyFocus(selectedId) {
-  const keep = selectedId ? adjacency[selectedId] : null;
+function updatePacketDims(set) {
+  for (const ls of linkStates) {
+    if (!ls.packetRange) continue;
+    const sys = packetSystems[ls.def.layer];
+    if (!sys) continue;
+    const involved = !set || (set.has(ls.def.a) || set.has(ls.def.b));
+    const v = involved ? 1 : 0.08;
+    const [start, n] = ls.packetRange;
+    for (let i = 0; i < n; i++) sys.aDim[start + i] = v;
+    sys.attrDim.needsUpdate = true;
+  }
+}
+
+function applyFocus(set) {
+  lastFocusSet = set;
   for (const id in nodeById) {
     const n = nodeById[id];
-    const dimmed = keep && id !== selectedId && !keep.has(id);
+    const dimmed = set && !set.has(id);
     n.mesh.material.opacity = dimmed ? 0.22 : (n.def.cat === 'net' ? 0.85 : 1);
     n.halo.material.opacity = dimmed ? 0.12 : 1;
     n.label.fillOpacity = dimmed ? 0.1 : 1;
-    if (n.edge) n.edge.material.opacity = dimmed ? 0.12 : 0.9;
-    if (!keep || id === selectedId) n.mesh.material.emissiveIntensity = id === selectedId ? 0.85 : n.baseEmissive;
-    else n.mesh.material.emissiveIntensity = dimmed ? 0.02 : n.baseEmissive;
+    if (n.edge) n.edge.material.opacity = dimmed ? 0.12 : n.baseEdgeOpacity;
+    if (!set || !dimmed) n.mesh.material.emissiveIntensity = id === selected?.def.id ? 0.85 : n.baseEmissive;
+    else n.mesh.material.emissiveIntensity = 0.02;
   }
   for (const ls of linkStates) {
-    const involved = keep && (ls.def.a === selectedId || ls.def.b === selectedId);
-    ls.line.material.opacity = !keep ? ls.baseLineOpacity : involved ? 0.9 : 0.04;
-    ls.tubeMat.uniforms.uDim.value = !keep ? 1 : involved ? 1.5 : 0.05;
-    if (ls.label) ls.label.fillOpacity = !keep ? 1 : involved ? 1 : 0.05;
+    const involved = set && (set.has(ls.def.a) || set.has(ls.def.b));
+    ls.line.material.opacity = !set ? ls.baseLineOpacity : involved ? 0.9 : 0.04;
+    ls.tubeMat.uniforms.uDim.value = !set ? 1 : involved ? 1.5 : 0.05;
   }
+  updatePacketDims(set);
+}
+
+function setFocusSource(src) {
+  focusSource = src;
+  if (src !== 'search') document.getElementById('search').value = '';
+  if (src !== 'legend') Object.values(legendItems).forEach(x => x.classList.remove('active'));
 }
 
 function flyToNode(node) {
   const p = node.group.position.clone();
   const dir = camera.position.clone().sub(p).normalize();
-  const camPos = p.clone().add(dir.multiplyScalar(8.5)).add(new THREE.Vector3(0, 1.6, 0));
+  const camPos = p.clone().add(dir.multiplyScalar(9)).add(new THREE.Vector3(0, 1.6, 0));
   const tgt = p.clone().add(new THREE.Vector3(0, 0.8, 0));
   flyTo(camPos, tgt, 1.4);
 }
 
-function select(node) {
+function select(node, opts = {}) {
+  if (!node) return;
+  if (tourActive && !opts.tour) stopTour();
   if (selected && selected !== node) setEmissive(selected, false);
   selected = node;
   controls.autoRotate = false;
   clearTimeout(idleTimer);
   setEmissive(node, true);
-  applyFocus(node.def.id);
+  const set = new Set([node.def.id, ...adjacency[node.def.id]]);
+  setFocusSource('node');
+  applyFocus(set);
   flyToNode(node);
   document.getElementById('info-name').textContent = node.def.label;
   document.getElementById('info-cat').textContent =
@@ -667,24 +978,37 @@ function select(node) {
   document.getElementById('info-tags').innerHTML =
     (node.def.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
   infoEl.classList.add('open');
+  try { history.replaceState(null, '', '#' + node.def.id); } catch {}
 }
 
 function deselect() {
-  if (selected) setEmissive(selected, false);
-  selected = null;
-  infoEl.classList.remove('open');
+  clearSelection();
+  setFocusSource(null);
   applyFocus(null);
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => { if (!selected) controls.autoRotate = true; }, 5000);
 }
 
+function clearSelection() {
+  if (selected) setEmissive(selected, false);
+  selected = null;
+  infoEl.classList.remove('open');
+  try { history.replaceState(null, '', location.pathname + location.search); } catch {}
+}
+
 // click vs drag discrimination
 let downPos = null;
-renderer.domElement.addEventListener('pointerdown', ev => { downPos = [ev.clientX, ev.clientY]; });
+renderer.domElement.addEventListener('pointerdown', ev => {
+  downPos = [ev.clientX, ev.clientY];
+  stopTour();
+});
 
 renderer.domElement.addEventListener('pointermove', ev => {
   const { node, tube } = pick(ev);
-  if (hoveredNode && hoveredNode !== node && hoveredNode !== selected) setEmissive(hoveredNode, false);
+  if (hoveredNode && hoveredNode !== node && hoveredNode !== selected) {
+    const dim = lastFocusSet && !lastFocusSet.has(hoveredNode.def.id);
+    hoveredNode.mesh.material.emissiveIntensity = dim ? 0.02 : hoveredNode.baseEmissive;
+  }
   hoveredNode = node;
   if (hoveredNode && hoveredNode !== selected) setEmissive(hoveredNode, true);
 
@@ -693,7 +1017,24 @@ renderer.domElement.addEventListener('pointermove', ev => {
   if (hoveredTube) hoveredTube.material.uniforms.uBoost.value = 2.4;
 
   renderer.domElement.style.cursor = (hoveredNode || hoveredTube) ? 'pointer' : 'default';
+
+  // tooltip
+  if (node) {
+    tipEl.innerHTML = `<b>${node.def.label}</b><div class="t2">${CATEGORIES[node.def.cat].label}</div>`;
+  } else if (tube) {
+    const d = tube.userData.linkDef;
+    const A = nodeById[d.a], B = nodeById[d.b];
+    tipEl.innerHTML = `<b>${A.def.label} → ${B.def.label}</b><div class="t2">${LAYERS[d.layer].label}${d.label ? ' · ' + d.label : ''}</div>`;
+  } else {
+    tipEl.style.display = 'none';
+    return;
+  }
+  tipEl.style.display = 'block';
+  tipEl.style.left = Math.min(ev.clientX + 16, window.innerWidth - tipEl.offsetWidth - 10) + 'px';
+  tipEl.style.top  = Math.min(ev.clientY + 16, window.innerHeight - tipEl.offsetHeight - 10) + 'px';
 });
+
+renderer.domElement.addEventListener('pointerleave', () => { tipEl.style.display = 'none'; });
 
 renderer.domElement.addEventListener('click', ev => {
   if (downPos && Math.hypot(ev.clientX - downPos[0], ev.clientY - downPos[1]) > 5) return; // was a drag
@@ -702,10 +1043,95 @@ renderer.domElement.addEventListener('click', ev => {
   else deselect();
 });
 
+/* ---------- search ---------- */
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const searchEl = document.getElementById('search');
+searchEl.addEventListener('input', () => {
+  const q = norm(searchEl.value.trim());
+  if (q.length < 2) { setFocusSource(null); applyFocus(null); return; }
+  const ids = new Set(NODES.filter(n =>
+    norm(n.label).includes(q) ||
+    (n.tags || []).some(t => norm(t).includes(q)) ||
+    norm(n.desc || '').includes(q)
+  ).map(n => n.id));
+  if (selected && !ids.has(selected.def.id)) clearSelection();
+  setFocusSource('search');
+  applyFocus(ids.size ? ids : new Set(['__none__']));
+});
+searchEl.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') {
+    const q = norm(searchEl.value.trim());
+    if (q.length < 2) return;
+    const hit = NODES.find(n =>
+      norm(n.label).includes(q) ||
+      (n.tags || []).some(t => norm(t).includes(q)) ||
+      norm(n.desc || '').includes(q));
+    if (hit) select(nodeById[hit.id]);
+  } else if (ev.key === 'Escape') {
+    searchEl.value = '';
+    setFocusSource(null);
+    applyFocus(null);
+    searchEl.blur();
+  }
+});
+
+/* ---------- auto-tour ---------- */
+const TOUR = ['workstation', 'tailnet', 'openwebui', 'n8n', 'qdrant', 'redmine', 'dsh', 'worker', 'haB', 'grafana', 'piholeA', 'searxng'];
+let tourActive = false, tourIdx = 0, tourTimer = null;
+const tourBtn = document.getElementById('tour');
+function tourStep() {
+  const id = TOUR[tourIdx % TOUR.length];
+  tourIdx++;
+  select(nodeById[id], { tour: true });
+}
+function startTour() {
+  tourActive = true;
+  tourBtn.classList.add('on');
+  tourBtn.textContent = '■ stop tour';
+  tourIdx = 0;
+  tourStep();
+  tourTimer = setInterval(tourStep, 6500);
+}
+function stopTour() {
+  if (!tourActive) return;
+  tourActive = false;
+  clearInterval(tourTimer);
+  tourTimer = null;
+  tourBtn.classList.remove('on');
+  tourBtn.textContent = '▶ auto-tour';
+}
+tourBtn.addEventListener('click', () => tourActive ? stopTour() : startTour());
+
+/* ---------- keyboard ---------- */
+window.addEventListener('keydown', ev => {
+  if (ev.target === searchEl && ev.key !== 'Escape') return;
+  if (ev.key === '/') { ev.preventDefault(); searchEl.focus(); }
+  else if (ev.key === 'Escape') { stopTour(); deselect(); }
+  else if (ev.key === 'r' || ev.key === 'R') { stopTour(); flyTo(HOME_CAM, HOME_TGT, 1.2); }
+  else if (ev.key === 't' || ev.key === 'T') { tourActive ? stopTour() : startTour(); }
+  else if (['1', '2', '3', '4'].includes(ev.key)) {
+    const key = Object.keys(LAYERS)[Number(ev.key) - 1];
+    const input = layerInputs[key];
+    if (input) { input.checked = !input.checked; input.dispatchEvent(new Event('change')); }
+  }
+});
+
+/* ---------- copy view link ---------- */
+document.getElementById('copy-link').addEventListener('click', async () => {
+  const btn = document.getElementById('copy-link');
+  try {
+    await navigator.clipboard.writeText(location.href);
+    btn.textContent = '✓ copied';
+  } catch {
+    btn.textContent = '✗ clipboard blocked';
+  }
+  setTimeout(() => { btn.textContent = '⧉ copy view link'; }, 1600);
+});
+
 /* ---------- post-processing ---------- */
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.6, 0.85);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.55, 0.82);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -740,17 +1166,27 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
+  if (reflectorRef) reflectorRef.getRenderTarget().setSize(
+    Math.floor(window.innerWidth * 0.5), Math.floor(window.innerHeight * 0.5));
 });
 
 /* ---------- animate ---------- */
 const clock = new THREE.Clock();
 let fpsEMA = 60;
+let introT = 0;
+let introDone = false;
+let linkFadeApplied = false;
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
   fpsEMA += (1 / Math.max(dt, 1e-4) - fpsEMA) * 0.05;
+
+  if (!introDone) {
+    introT += dt;
+    if (introT > 5.5) introDone = true;
+  }
 
   // camera animation
   if (camAnim) {
@@ -769,17 +1205,45 @@ function animate() {
     controls.update();
   }
 
-  // gentle node float + halo pulse
+  // power-on intro: nodes pop in, links + packets fade in
   for (const id in nodeById) {
     const n = nodeById[id];
+    const delay = n.group.userData.introDelay;
+    const k = clamp01((introT - delay) / 0.7);
+    const pop = k < 1 ? Math.max(easeOutBack(k), 0) : 1;
+    const hoverScale = selected === n ? 1.14 : (hoveredNode === n ? 1.07 : 1);
+    const target = pop * hoverScale;
+    const sk = 1 - Math.exp(-8 * dt);
+    n.group.scale.x += (target - n.group.scale.x) * sk;
+    n.group.scale.y = n.group.scale.z = n.group.scale.x;
     const phase = id.length * 1.37;
     n.group.position.y = n.baseY + Math.sin(t * 0.9 + phase) * 0.09;
     const s = (n.def.cat === 'net' ? 3.0 : 2.5) * (1 + Math.sin(t * 1.6 + phase) * 0.07);
     n.halo.scale.setScalar(s);
   }
 
-  // shader pulse time
+  // link + packet intro fade
+  const linkFade = clamp01((introT - 1.6) / 1.2);
+  for (const key in packetSystems) packetSystems[key].mat.uniforms.uAlpha.value = linkFade;
   for (const m of tubeMats) m.uniforms.uTime.value = t;
+  if (linkFade < 1) {
+    for (const ls of linkStates) ls.line.material.opacity = ls.baseLineOpacity * linkFade;
+  } else if (!linkFadeApplied) {
+    linkFadeApplied = true;
+    applyFocus(lastFocusSet);
+  }
+
+  // scan floor + pedestals + platform pulse
+  scanMat.uniforms.uTime.value = t;
+  for (const r of pedestalRings) {
+    r.mesh.rotation.z = t * r.speed + r.phase;
+    r.mesh.material.opacity = 0.16 + 0.10 * Math.sin(t * 1.4 + r.phase);
+  }
+  for (let i = 0; i < platformEdges.length; i++) {
+    platformEdges[i].material.opacity = 0.55 + 0.25 * Math.sin(t * 1.1 + i * 2.1);
+  }
+
+  for (const key in packetSystems) packetSystems[key].mat.uniforms.uTime.value = t;
   gradePass.uniforms.uTime.value = t;
 
   composer.render();
@@ -787,13 +1251,17 @@ function animate() {
 
 animate();
 window.__infraDebug = {
-  nodeById, camera, controls, THREE, linkGroups, linkStates, tubeMats,
+  nodeById, camera, controls, THREE, linkGroups, linkStates, tubeMats, packetSystems,
   get fps() { return fpsEMA; },
 };
 document.getElementById('loader').classList.add('done');
 
-// cinematic intro
-flyTo(HOME_CAM, HOME_TGT, 2.6, () => { controls.autoRotate = true; });
+// cinematic intro -> then honour deep link (#node)
+flyTo(HOME_CAM, HOME_TGT, 3.2, () => {
+  const hash = location.hash.replace('#', '');
+  if (hash && nodeById[hash]) { select(nodeById[hash]); return; }
+  controls.autoRotate = true;
+});
 </script>
 </body>
 </html>
