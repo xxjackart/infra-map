@@ -1,0 +1,13 @@
+{
+  "name": "infra-map",
+  "private": true,
+  "description": "Architecture-as-code map of a private AI infrastructure (LikeC4)",
+  "scripts": {
+    "dev": "likec4 serve --port 5173",
+    "validate": "likec4 validate",
+    "build": "node scripts/clean.mjs && likec4 build --base /infra-map/ --use-hash-history --theme dark -o . && node scripts/postbuild.mjs"
+  },
+  "devDependencies": {
+    "likec4": "1.59.3"
+  }
+}

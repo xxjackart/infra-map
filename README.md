@@ -1,42 +1,39 @@
-# Private AI Infrastructure · Interactive 3D Map
+# Private AI Infrastructure · architecture map
 
-Interactive 3D visualization of a two-site self-hosted infrastructure, built as a single HTML file with [Three.js](https://threejs.org/) (no build step).
+Architecture-as-code map of a two-site self-hosted system, built with [LikeC4](https://likec4.dev/): one declarative model, many generated 2D views with auto-layout.
 
-**Live demo:** https://xxjackart.github.io/infra-map/
+**Live:** https://xxjackart.github.io/infra-map/
 
-![type](https://img.shields.io/badge/type-static%20site-blue) ![build](https://img.shields.io/badge/build-none-brightgreen) ![deps](https://img.shields.io/badge/deps-CDN%20only-brightgreen)
+![type](https://img.shields.io/badge/type-architecture--as--code-blue) ![tool](https://img.shields.io/badge/tool-LikeC4-informational) ![build](https://img.shields.io/badge/build-static%20site-brightgreen)
 
-## Features
+## What it shows
 
-- 33 nodes / 59 edges, data-driven (`NODES` / `LINKS` arrays: edit to evolve the map)
-- 4 toggleable connection layers: network (mesh VPN / L3), data flow (ETL / RAG), monitoring, DNS
-- Click a node → focus mode (dims non-neighbors) + camera fly-to + details panel
-- Animated data packets along every edge (1 draw call per layer, GPU-computed bezier motion)
-- Power-on intro: nodes pop in sequence while links and packets fade in
-- Search (`/`), auto-tour (`t`), clickable legend with per-category focus, deep links (`#node`), copy-view-link
-- Hover tooltips for nodes and links; keyboard shortcuts (`r` reset, `1-4` layer toggles, `esc` release)
-- Animated scan-grid floor with pulse rings, sky gradient, pedestal rings + contact shadows
-- Shader glow pulses along links, bloom, ACES tone mapping, SMAA, reflective floor, vignette + film grain
-- SDF text labels (troika-three-text), auto-rotate with idle resume
+- **Landscape**: two sites, an always-on agent node, clients, the private overlay, external systems
+- **Services**: what runs on each host, with real runtime dependencies
+- **Connectivity**: three independent layers (L3 routing, identity overlay, L2 service discovery)
+- **Data & RAG**: ingestion pipelines, knowledge base, vector store, shared agent memory
+- **Observability**: metrics scraping (including cross-site), dashboards, uptime failover pair
+- **DNS**: two independent resolver chains
+- **Security**: secrets flow, edge gateway, the single inbound chat channel
+- **Dynamic flows**: content to knowledge base, shared agent memory, monitoring and alerting, remote access
 
-## Run locally
+## How it works
 
-Any static file server works (ES modules require http):
+The single source of truth is `model/infra.c4` (LikeC4 DSL: specification, elements, relationships, views). The static site is generated from it, no runtime dependencies:
 
 ```bash
-npx serve .        # or: python3 -m http.server
+npm install
+npm run dev        # local viewer with live reload
+npm run validate   # model checks
+npm run build      # clean + build static site into the repo root
 ```
 
-## Tech
+The build uses `--base /infra-map/` and hash-based routing, so the same artifact works on GitHub Pages and behind a reverse proxy without server-side rewrites.
 
-- Three.js r169 via importmap (jsdelivr CDN): no bundler, no node_modules
-- OrbitControls, EffectComposer (UnrealBloom / Output / ShaderPass / SMAA), Reflector
-- troika-three-text for crisp SDF labels
+## Views versus a single diagram
 
-## Editing the map
-
-All content lives in the `NODES`, `LINKS`, `CATEGORIES`, and `LAYERS` constants at the top of the module script in `index.html`. Node descriptions and tags are shown in the info panel on click.
+A graph of nearly forty elements on one canvas is unreadable. This map is split into focused views (each with a short description), and the model is written once: elements and relationships are never duplicated across views. Layout is computed (ELK), so nothing is hand-positioned.
 
 ## Security note
 
-The map is intentionally public-safe: tool names and architectural patterns only, with no IPs, hostnames, locations, or version strings.
+The map is intentionally public-safe: tool names and architectural patterns only, with no addresses, hostnames, domains, locations, ports or software versions.

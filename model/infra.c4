@@ -1,0 +1,403 @@
+// infra-map · architecture-as-code (LikeC4)
+// Public-safe: tool names and patterns only. No IPs, domains, locations, ports, versions, users.
+// One model, many views. Edit here, then: npm run build (clean + build), deploy the output.
+
+specification {
+  color c-actor #e8eefc
+  color c-zone #5b7ad6
+  color c-service #4f8cff
+  color c-store #9d6bff
+  color c-edge #ff6b81
+  color c-network #2fe6a8
+  color c-agent #ffd166
+  color c-external #8a93a8
+
+  element actor {
+    style { shape person; color c-actor }
+  }
+  element zone {
+    style { shape rectangle; color c-zone }
+  }
+  element service {
+    style { shape component; color c-service }
+  }
+  element store {
+    style { shape storage; color c-store }
+  }
+  element edge {
+    style { shape rectangle; color c-edge }
+  }
+  element network {
+    style { shape rectangle; color c-network }
+  }
+  element agent {
+    style { shape component; color c-agent }
+  }
+  element external {
+    style { shape rectangle; color c-external }
+  }
+
+  relationship scrape {
+    technology 'metrics pull'
+    color amber
+    line dotted
+  }
+  relationship monitors {
+    color amber
+    line dotted
+  }
+
+  tag failover
+}
+
+model {
+  // ============ people & devices ============
+  user = actor 'User'
+  mobile = actor 'Mobile devices'
+  workstation = actor 'Workstation · agent hub' {
+    icon tech:apple
+    description '''
+      Daily driver. Runs the agent CLI as the hub of the MCP ecosystem,
+      offline speech-to-text and local LLMs.
+    '''
+  }
+
+  // ============ network layer ============
+  tailnet = network 'Tailscale mesh' {
+    description '''
+      Mesh VPN (WireGuard-based). Identity instead of addresses:
+      each node gets an overlay identity, NAT traversal is automatic,
+      traffic is end-to-end encrypted between nodes.
+    '''
+  }
+  mdnsRelay = network 'mDNS relay' {
+    description '''
+      Userspace relay that bridges service discovery between the two LANs:
+      multicast (Bonjour) is forwarded as unicast over the overlay.
+    '''
+  }
+
+  // ============ site A · hub ============
+  siteA = zone 'Site A · hub' {
+    description 'Primary host. Runs the application core, data platform, edge and observability.'
+
+    openWebUI = service 'OpenWebUI' {
+      description 'Knowledge base hub and RAG front-end: OpenAI-compatible API, ~30 thematic collections, chat interface for local agents.'
+    }
+    n8n = service 'n8n' {
+      description 'Workflow orchestrator, the ETL backbone: ingest, AI scoring, dedup, KB upload, digests, backups, mail processing.'
+    }
+    redmine = service 'Redmine' {
+      description 'Task and project tracker. Single source of truth for work items, wiki and time tracking.'
+    }
+    postgres = store 'PostgreSQL' {
+      icon tech:postgresql
+      description 'Relational database for application data and analytics.'
+    }
+    qdrant = store 'Qdrant' {
+      icon tech:qdrant
+      description 'Vector database: embeddings for semantic search, plus lock/dedup store for ingestion pipelines.'
+    }
+    grafana = service 'Grafana' {
+      icon tech:grafana
+      description 'Dashboards: system, containers, DNS, databases, workflow metrics, knowledge-base stats.'
+    }
+    prometheus = service 'Prometheus' {
+      icon tech:prometheus
+      description 'Metrics TSDB. Scrapes exporters every 60s, including the satellite site and the agent node over the L3 tunnel. 30-day retention, alert rules.'
+    }
+    kumaA = service 'Uptime Kuma (A)' {
+      #failover
+      description 'Uptime monitor, instance 1 of the failover pair. Watches tailnet services every 60s.'
+    }
+    piholeA = service 'Pi-hole (A)' {
+      description 'Network-wide ad and telemetry blocking at DNS level, covering devices that cannot run blockers.'
+    }
+    unboundA = service 'Unbound (A)' {
+      description 'Recursive, validating (DNSSEC) caching resolver. Queries authoritative nameservers directly.'
+    }
+    haA = service 'Home Assistant (A)' {
+      description 'Home automation instance A: entities, automations, dashboards.'
+    }
+    homepage = service 'Homepage' {
+      description 'Start page aggregating all services with live widgets.'
+    }
+    infisical = service 'Infisical' {
+      description 'Secrets management. Single source of truth for API keys and tokens, injected into local tools at launch.'
+    }
+    caddy = edge 'Caddy' {
+      description 'Reverse proxy and MCP gateway with automatic certificates. Edge routing for the automation API and remote MCP endpoints.'
+    }
+    audiobookshelf = service 'Audiobookshelf' {
+      description 'Self-hosted audiobook and podcast server with mobile apps.'
+    }
+    searxng = service 'SearXNG' {
+      description 'Self-hosted metasearch aggregating public engines: no tracking, no API quota. The zero-cost web-search layer for agents.'
+    }
+    dsh = agent 'Agent harness' {
+      icon tech:nodejs
+      description 'Long-running agent on the hub: daily digests to the tracker, shared-memory producer, MCP clients.'
+    }
+    chatBridge = agent 'Chat bridge' {
+      description 'Bridges the end-to-end encrypted chat channel to the hub agent. Loopback-only API, hardened container.'
+    }
+  }
+
+  // ============ site B · satellite ============
+  siteB = zone 'Site B · satellite' {
+    description 'Secondary site: home automation and independent DNS. Keeps working when the hub is down.'
+
+    piholeB = service 'Pi-hole (B)' {
+      description 'Site B ad-blocking DNS. Same role, fully independent resolver chain.'
+    }
+    unboundB = service 'Unbound (B)' {
+      description 'Site B recursive resolver (DNSSEC), mirrors the site A chain.'
+    }
+    haB = service 'Home Assistant (B)' {
+      description 'Primary automation instance: ~350 entities, Zigbee/Thread border router, voice-assistant integrations.'
+    }
+    kumaB = service 'Uptime Kuma (B)' {
+      #failover
+      description 'Uptime monitor, instance 2 of the failover pair. The watchdog must not die with what it watches.'
+    }
+    haMcp = edge 'Home automation MCP' {
+      description 'MCP endpoint exposing the automation instance to agents, reachable through the gateway.'
+    }
+  }
+
+  // ============ agent node ============
+  workerNode = zone 'Agent worker · always-on node' {
+    description 'Dedicated headless node running a remote agent endpoint: delegated tasks, phone access, shared-memory producer, encrypted file inbox.'
+
+    agentApi = service 'Agent endpoint' {
+      description 'Remote agent API: delegation from the workstation and mobile access.'
+    }
+    fileInbox = service 'Encrypted file inbox' {
+      description 'Private file share used to drop documents and audio for the agents.'
+    }
+  }
+
+  // ============ external systems ============
+  aiApis = external 'AI APIs' {
+    icon tech:openai
+    description 'External language and speech APIs: primary model family (scoring, drafts, synthesis), classification, speech-to-text. Non-sensitive content only.'
+  }
+  contentSources = external 'Content sources' {
+    icon tech:youtube
+    description 'RSS feeds, video playlists, e-mail, voice memos, saved articles, NAS folders: raw material for ingestion pipelines.'
+  }
+  cloudUtils = external 'Cloud utilities' {
+    icon tech:google-drive
+    description 'Off-site destination for workflow backups and delivery channel for pipeline and uptime reports.'
+  }
+  chatNetwork = external 'E2E chat network' {
+    description 'Decentralised end-to-end encrypted messaging network. No phone number, no global identity. The only inbound channel for the hub agent.'
+  }
+  rootDns = external 'Root / authoritative nameservers' {
+    description 'The end of the recursive resolver chain.'
+  }
+
+  // ============ relationships: network ============
+  user -> workstation 'drives'
+  mobile -> tailnet 'joins (always on)'
+  workstation -> tailnet 'joins'
+  tailnet -> siteA 'exposes services'
+  tailnet -> siteB 'exposes services'
+  tailnet -> workerNode 'exposes services'
+  siteA <-> siteB 'L3 site-to-site' {
+    technology 'WireGuard tunnel between the sites'
+  }
+  siteA <-> mdnsRelay 'Bonjour discovery'
+  siteB <-> mdnsRelay 'Bonjour discovery'
+  mdnsRelay -> tailnet 'transport' {
+    technology 'unicast over overlay'
+  }
+
+  // ============ relationships: data & platform ============
+  contentSources -> n8n 'ingest'
+  workstation -> n8n 'voice memo webhook'
+  n8n -> aiApis 'scoring & synthesis'
+  n8n -> openWebUI 'KB upload'
+  n8n -> qdrant 'embeddings & lock'
+  n8n -> postgres 'pipeline state'
+  n8n -> cloudUtils 'backups & reports'
+  openWebUI -> qdrant 'embeddings'
+  openWebUI -> aiApis 'chat & synthesis'
+  redmine -> postgres 'data'
+  dsh -> redmine 'daily digest'
+  dsh -> openWebUI 'shared memory'
+  dsh -> searxng 'web search'
+  chatNetwork -> chatBridge 'E2E transport'
+  chatBridge -> dsh 'loopback agent API'
+  workstation -> openWebUI 'RAG API'
+  workstation -> redmine 'MCP'
+  workstation -> grafana 'MCP'
+  workstation -> infisical 'secrets at launch'
+  workstation -> searxng 'web search'
+  workstation -> workerNode.agentApi 'delegated tasks'
+  workerNode.agentApi -> openWebUI 'memory sync'
+  workerNode.agentApi -> redmine 'MCP'
+  mobile -> workerNode.fileInbox 'file drop'
+
+  // ============ relationships: DNS ============
+  mobile -> piholeA 'DNS (tailnet-wide)'
+  workstation -> piholeA 'DNS (tailnet-wide)'
+  piholeA -> unboundA 'upstream'
+  piholeB -> unboundB 'upstream'
+  unboundA -> rootDns 'recursion'
+  unboundB -> rootDns 'recursion'
+
+  // ============ relationships: observability ============
+  prometheus -> grafana 'data source'
+  prometheus -[scrape]-> n8n
+  prometheus -[scrape]-> qdrant
+  prometheus -[scrape]-> piholeA
+  prometheus -[scrape]-> unboundA
+  prometheus -[scrape]-> piholeB 'over L3'
+  prometheus -[scrape]-> unboundB 'over L3'
+  prometheus -[scrape]-> workerNode.agentApi 'over tailnet' {
+    technology 'node exporter'
+  }
+  kumaA -[monitors]-> openWebUI
+  kumaA -[monitors]-> haB
+  kumaA -[monitors]-> haA
+  kumaA -[monitors]-> audiobookshelf
+  kumaB -[monitors]-> haB
+  kumaB -[monitors]-> openWebUI
+  kumaA <-> kumaB 'failover pair' {
+    technology 'independent instances'
+  }
+  kumaA -> cloudUtils 'alerts'
+  homepage -> grafana 'widgets'
+
+  // ============ relationships: edge & security ============
+  caddy -> n8n 'automation API route'
+  caddy -> haMcp 'MCP proxy'
+  workstation -> caddy 'MCP via gateway'
+}
+
+views {
+  // ---------- L0 · landscape ----------
+  view index {
+    title 'Landscape'
+    description '''
+      The whole system on one screen: two self-hosted sites, an always-on agent node,
+      users, the private overlay and the external systems they talk to.
+      Start here, then drill into the service, connectivity, data, observability, DNS and security views.
+    '''
+    include *
+    autoLayout LeftRight 70 70
+  }
+
+  // ---------- L1 · service maps ----------
+  view hub of siteA {
+    title 'Services · hub'
+    description 'Everything running on the primary site, grouped by role. Inside-site dependencies are shown; cross-site links live in the Connectivity view.'
+    include *
+    autoLayout LeftRight
+  }
+
+  view satellite of siteB {
+    title 'Services · satellite'
+    description 'The secondary site: automation and an independent DNS chain. It must survive hub outages.'
+    include *
+    autoLayout LeftRight
+  }
+
+  // ---------- L2 · connectivity ----------
+  view connectivity {
+    title 'Connectivity'
+    description '''
+      Three independent connectivity layers between the sites:
+      L3 routing, the identity overlay, and L2 service discovery.
+    '''
+    include *
+    exclude aiApis, contentSources, cloudUtils, chatNetwork, rootDns
+    autoLayout LeftRight
+  }
+
+  // ---------- L3 · data platform ----------
+  view data {
+    title 'Data & RAG'
+    description 'Ingestion pipelines, the knowledge base, the vector store and the shared agent memory.'
+    include contentSources, n8n, aiApis, openWebUI, qdrant, postgres, redmine, searxng, dsh, chatBridge, chatNetwork, cloudUtils
+    include workerNode.agentApi
+    autoLayout LeftRight
+  }
+
+  // ---------- L4 · observability ----------
+  view observability {
+    title 'Observability'
+    description 'Metrics scraping (including cross-site over L3), dashboards and the uptime failover pair.'
+    include prometheus, grafana, homepage, kumaA, kumaB, n8n, qdrant, piholeA, unboundA
+    include siteA.haA
+    include siteB.piholeB, siteB.unboundB
+    include workerNode.agentApi
+    autoLayout LeftRight
+  }
+
+  // ---------- L5 · DNS ----------
+  view dns {
+    title 'DNS'
+    description 'Two independent resolver chains. Tailnet clients resolve through the hub; site B devices use their local chain, so each site keeps resolving if the other goes down.'
+    include piholeA, unboundA, piholeB, unboundB, rootDns, mobile, workstation
+    autoLayout LeftRight
+  }
+
+  // ---------- L6 · security ----------
+  view security {
+    title 'Security'
+    description 'Secrets, the edge gateway, the single inbound chat channel and data egress policy.'
+    include infisical, caddy, workstation, n8n, haMcp, chatNetwork, chatBridge, dsh, aiApis, cloudUtils
+    autoLayout LeftRight
+  }
+
+  // ---------- dynamic views ----------
+  dynamic view flow-ingest {
+    title 'Flow · content to knowledge base'
+    description 'How a voice memo, article or feed item becomes searchable knowledge.'
+    workstation -> n8n 'voice memo webhook'
+    contentSources -> n8n 'feeds, mail, articles'
+    n8n -> aiApis 'score & synthesise'
+    n8n -> openWebUI 'upload to KB'
+    openWebUI -> qdrant 'embed & index'
+    include siteB, workerNode with { opacity 15% }
+  }
+
+  dynamic view flow-memory {
+    title 'Flow · shared agent memory'
+    description 'How both agents write to and recall from the federated memory layer.'
+    workerNode -> openWebUI 'push own memory'
+    dsh -> openWebUI 'push own memory'
+    mobile -> chatNetwork 'ask from phone'
+    chatNetwork -> chatBridge 'relay'
+    chatBridge -> dsh 'agent turn'
+    dsh -> openWebUI 'recall'
+    openWebUI -> qdrant 'vector search'
+    include siteB with { opacity 15% }
+  }
+
+  dynamic view flow-uptime {
+    title 'Flow · monitoring and alerting'
+    description 'Metrics pull inside and across sites, and what happens when something goes down.'
+    prometheus -> piholeA 'scrape every 60s'
+    prometheus -> piholeB 'scrape over L3'
+    prometheus -> workerNode 'scrape over tailnet'
+    prometheus -> grafana 'dashboards'
+    kumaA -> openWebUI 'HTTP probe'
+    kumaA -> cloudUtils 'alert on down'
+    include siteB, workerNode with { opacity 25% }
+  }
+
+  dynamic view flow-access {
+    title 'Flow · remote access'
+    description 'How a device reaches every service without exposing a single port to the public internet.'
+    mobile -> tailnet 'join overlay (always on)'
+    tailnet -> siteA 'reach services'
+    tailnet -> siteB 'reach services'
+    mobile -> piholeA 'DNS through overlay'
+    mobile -> workerNode 'drop a file'
+    caddy -> haMcp 'MCP proxy'
+    include user with { opacity 15% }
+  }
+}
